@@ -1,4 +1,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { lovable } from "@/integrations/lovable/index";
 
 /* ═══════════════════════════════════════════════════════
    GLOBAL CSS — GLASSMORPHISM PREMIUM
@@ -293,8 +296,11 @@ function GCard({children,t,style={},className="",onClick}:any){
 ═══════════════════════════════════════════════════════ */
 function LoginPage({onLogin,t,isDark,toggleTheme}:any){
   const [step,setStep]=useState(1);
+  const [mode,setMode]=useState<"register"|"signin">("register");
   const [role,setRole]=useState(null);
   const [showPw,setShowPw]=useState(false);
+  const [authLoading,setAuthLoading]=useState(false);
+  const [authError,setAuthError]=useState("");
   const [err,setErr]=useState<any>({});
   const [form,setForm]=useState<any>({name:"",age:"",gender:"",address:"",email:"",phone:"",password:"",bio:"",interests:[]});
 
@@ -329,22 +335,65 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
     setErr(e);return Object.keys(e).length===0;
   };
 
-  const submit=()=>{
+  const submit=async()=>{
     if(!validate())return;
+    setAuthLoading(true);
+    setAuthError("");
+    try {
+      const { error } = await supabase.auth.signUp({
+        email: form.email.trim().toLowerCase(),
+        password: form.password,
+        options: {
+          data: { full_name: form.name.trim() },
+          emailRedirectTo: window.location.origin,
+        },
+      });
+      if(error) { setAuthError(error.message); setAuthLoading(false); return; }
+      // Update profile with full registration data
+      // Wait briefly for the trigger to create the profile
+      await new Promise(r=>setTimeout(r,1500));
+      const { data: { user: newUser } } = await supabase.auth.getUser();
+      if(newUser) {
+        await supabase.from("profiles").update({
+          name: form.name.trim(),
+          phone: form.phone.trim(),
+          age: parseInt(form.age) || null,
+          gender: form.gender || null,
+          address: form.address.trim(),
+          bio: form.bio.trim(),
+          interests: form.interests,
+          role: role || 'user',
+        }).eq("user_id", newUser.id);
+      }
+      setStep(3);
+      setTimeout(()=>onLogin(), 2000);
+    } catch(e:any) {
+      setAuthError(e.message || "Registration failed");
+    }
+    setAuthLoading(false);
+  };
+
+  const signInSubmit=async()=>{
+    if(!form.email||!form.password){setAuthError("Email and password required");return;}
+    setAuthLoading(true);
+    setAuthError("");
+    const { error } = await supabase.auth.signInWithPassword({
+      email: form.email.trim().toLowerCase(),
+      password: form.password,
+    });
+    if(error) { setAuthError(error.message); setAuthLoading(false); return; }
     setStep(3);
-    setTimeout(()=>onLogin({
-      name:form.name.trim(),
-      age:form.age,
-      gender:form.gender,
-      address:form.address.trim(),
-      email:form.email.trim().toLowerCase(),
-      phone:form.phone.trim(),
-      bio:form.bio.trim(),
-      interests:form.interests,
-      role,
-      joinedDate:new Date().toLocaleDateString("en-IN",{day:"numeric",month:"long",year:"numeric"}),
-      joinedFull:new Date().toISOString(),
-    }),2600);
+    setTimeout(()=>onLogin(), 1500);
+    setAuthLoading(false);
+  };
+
+  const socialLogin=async(provider:"google"|"apple")=>{
+    setAuthLoading(true);
+    setAuthError("");
+    const { error } = await lovable.auth.signInWithOAuth(provider, {
+      redirect_uri: window.location.origin,
+    });
+    if(error) { setAuthError((error as any).message || "OAuth failed"); setAuthLoading(false); }
   };
 
   /* Step 3 */
@@ -363,7 +412,48 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
     </div>
   );
 
-  /* Step 2 */
+  /* Step 2 - Sign In mode */
+  if(step===2 && mode==="signin") return(
+    <div className="su" style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"28px 16px 80px"}}>
+      <div style={{width:"100%",maxWidth:420}}>
+        <div style={{textAlign:"center",marginBottom:32}}>
+          <div style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:56,height:56,borderRadius:18,background:`linear-gradient(135deg,${t.primary},${t.accent})`,marginBottom:20,boxShadow:`0 0 40px ${t.glow}`}}>
+            <I n="zap" s={24} c="#fff" sw={2}/>
+          </div>
+          <h2 style={{fontFamily:"Syne",fontSize:28,fontWeight:800,color:t.text}}>Welcome back</h2>
+          <p style={{color:t.sub,fontSize:14,marginTop:6}}>Sign in to your MicroLink account</p>
+        </div>
+        <GCard t={t} style={{padding:"26px 24px"}}>
+          <div style={{display:"flex",flexDirection:"column",gap:16}}>
+            <GlassInp label="Email" ic="mail" type="email" value={form.email} onChange={(e:any)=>upd("email",e.target.value)} placeholder="you@email.com" t={t}/>
+            <GlassInp label="Password" ic="shield" type={showPw?"text":"password"} value={form.password} onChange={(e:any)=>upd("password",e.target.value)} placeholder="Your password" t={t}
+              suffix={<button onClick={()=>setShowPw(s=>!s)} style={{background:"none",border:"none",cursor:"pointer",color:t.muted,display:"flex",padding:0}}><I n={showPw?"eyeO":"eye"} s={15}/></button>}
+            />
+            {authError&&<p style={{fontSize:12,color:t.danger,fontWeight:600,textAlign:"center"}}>⚠ {authError}</p>}
+            <button className="press" onClick={signInSubmit} disabled={authLoading}
+              style={{width:"100%",padding:"14px 0",borderRadius:14,background:`linear-gradient(135deg,${t.primary},${t.accent})`,color:"#fff",border:"none",cursor:"pointer",fontFamily:"Syne",fontWeight:800,fontSize:15,opacity:authLoading?.6:1}}>
+              {authLoading?"Signing in…":"Sign In"}
+            </button>
+            <div style={{display:"flex",gap:10,marginTop:4}}>
+              <button className="press" onClick={()=>socialLogin("google")} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,padding:"10px",borderRadius:12,background:t.secondary,border:`1px solid ${t.border}`,cursor:"pointer",color:t.text,fontSize:12,fontWeight:600}}>
+                <svg width="16" height="16" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+                Google
+              </button>
+              <button className="press" onClick={()=>socialLogin("apple")} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,padding:"10px",borderRadius:12,background:t.secondary,border:`1px solid ${t.border}`,cursor:"pointer",color:t.text,fontSize:12,fontWeight:600}}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill={t.text}><path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.48-3.24 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/></svg>
+                Apple
+              </button>
+            </div>
+          </div>
+        </GCard>
+        <button onClick={()=>{setMode("register");setStep(1);setAuthError("");}} style={{display:"block",margin:"18px auto 0",background:"none",border:"none",cursor:"pointer",color:t.primary,fontSize:13,fontWeight:700}}>
+          Don't have an account? Sign up →
+        </button>
+      </div>
+    </div>
+  );
+
+  /* Step 2 - Registration */
   if(step===2) return(
     <div className="su" style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",padding:"28px 16px 80px"}}>
       <div style={{width:"100%",maxWidth:600}}>
@@ -458,9 +548,10 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
             </div>
           </div>
 
-          <button className="press" onClick={submit}
-            style={{marginTop:24,width:"100%",padding:"14px 0",borderRadius:14,background:`linear-gradient(135deg,${t.primary},${t.accent})`,color:"#fff",border:"none",cursor:"pointer",fontFamily:"Syne",fontWeight:800,fontSize:15,display:"flex",alignItems:"center",justifyContent:"center",gap:10,boxShadow:`0 8px 28px ${t.primary}50`,letterSpacing:"0.3px"}}>
-            Create My Account <I n="arR" s={17} c="#fff" sw={2.5}/>
+          {authError&&<p style={{fontSize:12,color:t.danger,fontWeight:600,textAlign:"center",marginTop:12}}>⚠ {authError}</p>}
+          <button className="press" onClick={submit} disabled={authLoading}
+            style={{marginTop:24,width:"100%",padding:"14px 0",borderRadius:14,background:`linear-gradient(135deg,${t.primary},${t.accent})`,color:"#fff",border:"none",cursor:"pointer",fontFamily:"Syne",fontWeight:800,fontSize:15,display:"flex",alignItems:"center",justifyContent:"center",gap:10,boxShadow:`0 8px 28px ${t.primary}50`,letterSpacing:"0.3px",opacity:authLoading?.6:1}}>
+            {authLoading?"Creating account…":<>Create My Account <I n="arR" s={17} c="#fff" sw={2.5}/></>}
           </button>
           <p style={{fontSize:11,color:t.muted,textAlign:"center",marginTop:12}}>By registering you agree to our Terms & Privacy Policy</p>
         </GCard>
@@ -508,6 +599,27 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
             <RoleCard key={r} title={title} desc={desc} ic={ic} col={col} grad={grad} feats={feats} t={t}
               onClick={()=>{setRole(r);setStep(2);}}/>
           ))}
+        </div>
+
+        {/* Social login + Sign in */}
+        <div style={{marginTop:40,display:"flex",flexDirection:"column",alignItems:"center",gap:14}}>
+          <p style={{fontSize:13,color:t.muted,fontWeight:600}}>Or sign in with</p>
+          <div style={{display:"flex",gap:12}}>
+            <button className="press" onClick={()=>socialLogin("google")} disabled={authLoading}
+              style={{display:"flex",alignItems:"center",gap:8,padding:"10px 22px",borderRadius:14,background:t.glass,backdropFilter:"blur(16px)",border:`1px solid ${t.border}`,cursor:"pointer",color:t.text,fontSize:13,fontWeight:600,boxShadow:t.shadow}}>
+              <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+              Google
+            </button>
+            <button className="press" onClick={()=>socialLogin("apple")} disabled={authLoading}
+              style={{display:"flex",alignItems:"center",gap:8,padding:"10px 22px",borderRadius:14,background:t.glass,backdropFilter:"blur(16px)",border:`1px solid ${t.border}`,cursor:"pointer",color:t.text,fontSize:13,fontWeight:600,boxShadow:t.shadow}}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill={t.text}><path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.48-3.24 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/></svg>
+              Apple
+            </button>
+          </div>
+          <button onClick={()=>{setMode("signin");setStep(2);setRole(null);}} style={{background:"none",border:"none",cursor:"pointer",color:t.primary,fontSize:13,fontWeight:700,marginTop:4}}>
+            Already have an account? Sign in →
+          </button>
+          {authError&&<p style={{fontSize:12,color:t.danger,fontWeight:600,textAlign:"center"}}>{authError}</p>}
         </div>
       </div>
     </div>
@@ -1290,10 +1402,10 @@ function Profile({t,user,online,setOnline}:any){
 ═══════════════════════════════════════════════════════ */
 export default function App(){
   injectCSS();
+  const { user: authUser, profile, loading: authLoading, signOut } = useAuth();
   const [dark,setDark]=useState(true);
-  const [page,setPage]=useState("login");
+  const [page,setPage]=useState(authUser ? "dashboard" : "login");
   const [online,setOnline]=useState(true);
-  const [user,setUser]=useState(null);
   const [wide,setWide]=useState(typeof window!=="undefined"&&window.innerWidth>=860);
 
   useEffect(()=>{
@@ -1302,9 +1414,51 @@ export default function App(){
     return()=>window.removeEventListener("resize",h);
   },[]);
 
-  const t=TH[dark?"dark":"light"];
-  const loggedIn=page!=="login";
-  const login=useCallback(u=>{setUser(u);setPage("dashboard");},[]);
+  // Auto-navigate based on auth state
+  useEffect(()=>{
+    if(!authLoading){
+      if(authUser && page==="login"){
+        setPage("dashboard");
+      } else if(!authUser && page!=="login"){
+        setPage("login");
+      }
+    }
+  },[authUser, authLoading, page]);
+
+  const t=(TH as any)[dark?"dark":"light"];
+  const loggedIn=page!=="login" && !!authUser;
+
+  // Convert profile to the format the UI expects
+  const userForUI = profile ? {
+    name: profile.name || authUser?.email?.split("@")[0] || "User",
+    email: profile.email || authUser?.email || "",
+    phone: profile.phone || "",
+    age: profile.age ? String(profile.age) : "",
+    gender: profile.gender || "",
+    address: profile.address || "",
+    bio: profile.bio || "",
+    interests: profile.interests || [],
+    role: profile.role || "user",
+    joinedDate: new Date(profile.created_at).toLocaleDateString("en-IN",{day:"numeric",month:"long",year:"numeric"}),
+    joinedFull: profile.created_at,
+    rating: profile.rating,
+  } : null;
+
+  const login=useCallback(()=>{
+    setPage("dashboard");
+  },[]);
+
+  if(authLoading) return (
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:t.bgGrad,color:t.text}}>
+      <Bg t={t}/>
+      <div style={{textAlign:"center",zIndex:1}}>
+        <div style={{width:56,height:56,borderRadius:18,background:`linear-gradient(135deg,${t.primary},${t.accent})`,display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:16,boxShadow:`0 0 40px ${t.glow}`}}>
+          <I n="zap" s={24} c="#fff" sw={2}/>
+        </div>
+        <p style={{fontFamily:"Syne",fontSize:18,fontWeight:700}}>Loading MicroLink…</p>
+      </div>
+    </div>
+  );
 
   return(
     <div style={{minHeight:"100vh",color:t.text,display:"flex",position:"relative",background:t.bgGrad}}>
@@ -1313,22 +1467,22 @@ export default function App(){
       {loggedIn&&wide&&(
         <Sidebar page={page} setPage={setPage} t={t} isDark={dark}
           toggleTheme={()=>setDark(v=>!v)} online={online}
-          setOnline={setOnline} user={user}/>
+          setOnline={setOnline} user={userForUI}/>
       )}
 
       <main style={{flex:1,position:"relative",zIndex:1,overflowY:"auto",paddingBottom:loggedIn&&!wide?80:0,minHeight:"100vh"}}>
         {loggedIn&&(
           <div style={{padding:"0 24px"}}>
-            <TopBar t={t} user={user} online={online} setOnline={setOnline} setPage={setPage}/>
+            <TopBar t={t} user={userForUI} online={online} setOnline={setOnline} setPage={setPage}/>
           </div>
         )}
         <div style={{padding:loggedIn?"0 24px":0}}>
           {page==="login"    &&<LoginPage onLogin={login} t={t} isDark={dark} toggleTheme={()=>setDark(v=>!v)}/>}
-          {page==="dashboard"&&<Dashboard t={t} user={user}/>}
+          {page==="dashboard"&&<Dashboard t={t} user={userForUI}/>}
           {page==="discover" &&<Discover t={t}/>}
           {page==="bidding"  &&<Bidding t={t}/>}
           {page==="chat"     &&<Chat t={t}/>}
-          {page==="profile"  &&<Profile t={t} user={user} online={online} setOnline={setOnline}/>}
+          {page==="profile"  &&<Profile t={t} user={userForUI} online={online} setOnline={setOnline}/>}
         </div>
       </main>
 

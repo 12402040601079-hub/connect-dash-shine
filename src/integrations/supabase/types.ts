@@ -14,7 +14,185 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      bids: {
+        Row: {
+          amount: number
+          created_at: string
+          helper_id: string
+          id: string
+          message: string | null
+          status: string
+          task_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          helper_id: string
+          id?: string
+          message?: string | null
+          status?: string
+          task_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          helper_id?: string
+          id?: string
+          message?: string | null
+          status?: string
+          task_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bids_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      messages: {
+        Row: {
+          created_at: string
+          id: string
+          is_read: boolean | null
+          receiver_id: string
+          sender_id: string
+          text: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_read?: boolean | null
+          receiver_id: string
+          sender_id: string
+          text: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_read?: boolean | null
+          receiver_id?: string
+          sender_id?: string
+          text?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          address: string | null
+          age: number | null
+          avatar_url: string | null
+          bio: string | null
+          created_at: string
+          email: string
+          gender: string | null
+          id: string
+          interests: string[] | null
+          is_online: boolean | null
+          name: string
+          phone: string | null
+          rating: number | null
+          review_count: number | null
+          role: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          address?: string | null
+          age?: number | null
+          avatar_url?: string | null
+          bio?: string | null
+          created_at?: string
+          email?: string
+          gender?: string | null
+          id?: string
+          interests?: string[] | null
+          is_online?: boolean | null
+          name?: string
+          phone?: string | null
+          rating?: number | null
+          review_count?: number | null
+          role?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          address?: string | null
+          age?: number | null
+          avatar_url?: string | null
+          bio?: string | null
+          created_at?: string
+          email?: string
+          gender?: string | null
+          id?: string
+          interests?: string[] | null
+          is_online?: boolean | null
+          name?: string
+          phone?: string | null
+          rating?: number | null
+          review_count?: number | null
+          role?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      tasks: {
+        Row: {
+          assigned_helper_id: string | null
+          budget: number
+          category: string
+          created_at: string
+          description: string
+          id: string
+          is_urgent: boolean | null
+          location_address: string | null
+          location_lat: number | null
+          location_lng: number | null
+          poster_id: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_helper_id?: string | null
+          budget?: number
+          category?: string
+          created_at?: string
+          description?: string
+          id?: string
+          is_urgent?: boolean | null
+          location_address?: string | null
+          location_lat?: number | null
+          location_lng?: number | null
+          poster_id: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_helper_id?: string | null
+          budget?: number
+          category?: string
+          created_at?: string
+          description?: string
+          id?: string
+          is_urgent?: boolean | null
+          location_address?: string | null
+          location_lat?: number | null
+          location_lng?: number | null
+          poster_id?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
