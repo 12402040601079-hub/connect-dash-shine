@@ -488,9 +488,9 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
 
         <h1 style={{fontFamily:"Syne",fontSize:"clamp(38px,6vw,66px)",fontWeight:800,lineHeight:1.05,letterSpacing:"-2px",marginBottom:20}}>
           <span style={{background:`linear-gradient(120deg,${t.primary},${t.accent})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>Earn</span>
-          <span style={{color:t.border,margin:"0 .15em"}}>·</span>
+          <span style={{color:t.muted,margin:"0 .15em"}}>·</span>
           <span style={{background:`linear-gradient(120deg,${t.accent},#06b6d4)`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>Help</span>
-          <span style={{color:t.border,margin:"0 .15em"}}>·</span>
+          <span style={{color:t.muted,margin:"0 .15em"}}>·</span>
           <span style={{background:`linear-gradient(120deg,#a78bfa,${t.primary})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>Grow</span>
           <br/>
           <span style={{color:t.text,fontSize:".8em",fontWeight:700}}>Together</span>
