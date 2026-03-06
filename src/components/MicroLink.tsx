@@ -32,6 +32,7 @@ import BidList from "@/components/workflow/BidList";
 import CompletionPanel from "@/components/workflow/CompletionPanel";
 import RatingDialog from "@/components/workflow/RatingDialog";
 import HelperMapCard from "@/components/workflow/HelperMapCard";
+import HelperRequestsMap from "@/components/workflow/HelperRequestsMap";
 
 /* ═══════════════════════════════════════════════════════
    GLOBAL CSS — GLASSMORPHISM PREMIUM
@@ -2067,6 +2068,7 @@ function Discover({t,currentUser}:any){
 function Bidding({t,currentUser,setPage}:any){
   const [exp,setExp]=useState(null);
   const [tab,setTab]=useState<"open"|"accepted"|"rejected">("open");
+  const [radius,setRadius]=useState<0|2|5|10>(0);
   const [amounts,setAmounts]=useState<any>({});
   const [note,setNote]=useState<any>({});
   const [tasks,setTasks]=useState<any[]>([]);
@@ -2094,6 +2096,35 @@ function Bidding({t,currentUser,setPage}:any){
     }
     return false;
   },[helperSkillSet]);
+
+  const helperLocation = useMemo(()=>{
+    const lat = Number(currentUser?.location?.lat);
+    const lng = Number(currentUser?.location?.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    return { lat, lng };
+  },[currentUser?.location?.lat, currentUser?.location?.lng]);
+
+  const taskDistanceKm = useCallback((task:any)=>{
+    if (!helperLocation) return null;
+    const lat = Number(task?.location?.lat);
+    const lng = Number(task?.location?.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) return null;
+    return distanceKm(helperLocation.lat, helperLocation.lng, lat, lng);
+  },[helperLocation]);
+
+  const nearbyOpenTasks = useMemo(()=>{
+    return tasks
+      .filter((task:any)=>task.status === "open" && taskMatchesHelperSkills(task))
+      .map((task:any)=>({
+        id: task.id,
+        title: task.title || "Task",
+        category: task.category || "General",
+        distanceKm: taskDistanceKm(task),
+        hasBid: Boolean(myBids[task.id]),
+        lat: Number(task?.location?.lat),
+        lng: Number(task?.location?.lng),
+      }));
+  },[tasks, taskMatchesHelperSkills, taskDistanceKm, myBids]);
 
   if(currentUser?.role === "user"){
     return(
@@ -2207,7 +2238,12 @@ function Bidding({t,currentUser,setPage}:any){
 
   const visibleTasks = tasks.filter((task:any)=>{
     const bid = myBids[task.id];
-    if(tab==="open") return task.status==="open" && !bid;
+    if(tab==="open") {
+      if (!(task.status==="open" && !bid)) return false;
+      if (radius === 0) return true;
+      const km = taskDistanceKm(task);
+      return km != null && km <= radius;
+    }
     if(tab==="accepted") return Boolean(bid) && ["pending","accepted"].includes(bid.status) && task.status!=="cancelled";
     return Boolean(bid) && ["withdrawn","rejected"].includes(bid.status);
   });
@@ -2224,6 +2260,15 @@ function Bidding({t,currentUser,setPage}:any){
             Add at least one skill in your helper profile to receive matching open tasks.
           </p>
         )}
+      </div>
+      <div style={{marginBottom:12}}>
+        <HelperRequestsMap
+          t={t}
+          tasks={nearbyOpenTasks}
+          radius={radius}
+          onRadiusChange={setRadius}
+          helperHasLocation={Boolean(helperLocation)}
+        />
       </div>
       <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
         {[
@@ -2254,7 +2299,7 @@ function Bidding({t,currentUser,setPage}:any){
                     <span style={{fontSize:9,fontWeight:800,color:t.primary,background:`${t.primary}15`,padding:"2px 8px",borderRadius:99}}>{task.category}</span>
                   </div>
                   <div style={{display:"flex",gap:14,flexWrap:"wrap"}}>
-                    {[{n:"pin",v:taskLocationLabel(task)},{n:"clock",v:fmtRelative(task.createdAt)},{n:"tag",v:done?"Bid sent":task.status==="open"?"Open":"Closed"},{n:"user",v:task.posterName || "User"}].map(x=>(
+                    {[{n:"pin",v:taskLocationLabel(task)},{n:"clock",v:fmtRelative(task.createdAt)},{n:"tag",v:done?"Bid sent":task.status==="open"?"Open":"Closed"},{n:"user",v:task.posterName || "User"}, {n:"pin",v:(()=>{const km=taskDistanceKm(task); return km==null?"Distance unknown":`${km.toFixed(1)} km away`;})()}].map(x=>(
                       <span key={x.v} style={{fontSize:12,color:t.muted,display:"flex",alignItems:"center",gap:4}}><I n={x.n} s={11}/>{x.v}</span>
                     ))}
                   </div>
