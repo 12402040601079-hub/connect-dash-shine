@@ -33,7 +33,7 @@ function toRadians(value: number): number {
   return (value * Math.PI) / 180;
 }
 
-function distanceKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+export function distanceKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const radius = 6371;
   const dLat = toRadians(lat2 - lat1);
   const dLng = toRadians(lng2 - lng1);

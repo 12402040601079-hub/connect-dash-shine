@@ -26,9 +26,12 @@ import {
 import { counterBid, placeBid as placeTaskBid, updateBidStatus, watchHelperBids } from "@/services/bids";
 import { getMyNotifications, markNotificationRead, notify } from "@/services/notifications";
 import { submitRating } from "@/services/ratings";
+import { rankHelpersForTask, distanceKm } from "@/lib/matching";
+import { getHelperProfiles } from "@/services/helpers";
 import BidList from "@/components/workflow/BidList";
 import CompletionPanel from "@/components/workflow/CompletionPanel";
 import RatingDialog from "@/components/workflow/RatingDialog";
+import HelperMapCard from "@/components/workflow/HelperMapCard";
 
 /* ═══════════════════════════════════════════════════════
    GLOBAL CSS — GLASSMORPHISM PREMIUM
@@ -374,10 +377,11 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
     const fields = socialIncomplete
       ? [form.name,form.age,form.gender,form.address,form.email,form.phone]
       : [form.name,form.age,form.gender,form.address,form.email,form.phone,form.password];
-    const total = fields.length + 1;
-    const done = fields.filter((x:any)=>String(x || "").length>0).length + (form.interests.length>0?1:0);
+    const needsHelperSkills = role === "helper";
+    const total = fields.length + (needsHelperSkills ? 1 : 0);
+    const done = fields.filter((x:any)=>String(x || "").length>0).length + (needsHelperSkills && form.interests.length>0 ? 1 : 0);
     return Math.round((done/total)*100);
-  },[form, socialIncomplete]);
+  },[form, socialIncomplete, role]);
 
   const validate=()=>{
     const e:any={};
@@ -389,7 +393,8 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
     if(!form.gender)e.gender="Please select gender";
     if(!form.address.trim())e.address="Address is required";
     if(!role)e.role="Please choose a role";
-    if(form.interests.includes("other") && !customInterest.trim())e.customInterest="Add your custom category";
+    if(role === "helper" && form.interests.length===0)e.interests="Choose at least one skill";
+    if(role === "helper" && form.interests.includes("other") && !customInterest.trim())e.customInterest="Add your custom category";
     setErr(e);return Object.keys(e).length===0;
   };
 
@@ -397,10 +402,12 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
     if(!validate())return;
     setAuthLoading(true);
     setAuthError("");
-    const normalizedInterests = [
-      ...form.interests.filter((interest:string)=>interest!=="other"),
-      ...(form.interests.includes("other") && customInterest.trim() ? [customInterest.trim()] : []),
-    ];
+    const normalizedInterests = role === "helper"
+      ? [
+          ...form.interests.filter((interest:string)=>interest!=="other"),
+          ...(form.interests.includes("other") && customInterest.trim() ? [customInterest.trim()] : []),
+        ]
+      : [];
 
     try {
       const profilePayload = {
@@ -558,7 +565,14 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
                 key={opt.id}
                 className="press"
                 type="button"
-                onClick={()=>{setRole(opt.id);setErr((p:any)=>({...p,role:""}));}}
+                onClick={()=>{
+                  setRole(opt.id);
+                  setErr((p:any)=>({...p,role:"",interests:"",customInterest:""}));
+                  if(opt.id !== "helper"){
+                    setForm((p:any)=>({...p,interests:[]}));
+                    setCustomInterest("");
+                  }
+                }}
                 style={{
                   padding:"7px 13px",
                   borderRadius:99,
@@ -626,46 +640,48 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
             </div>}
           </div>
 
-          {/* Interests */}
-          <div style={{marginTop:24,paddingTop:20,borderTop:`1px solid ${t.border}`}}>
-            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
-              <I n="sparkles" s={14} c={t.primary}/>
-              <span style={{fontSize:13,fontWeight:700,color:t.text}}>{role==="helper"?"Your Skills & Services":"What do you need help with?"}</span>
-            </div>
-            <p style={{fontSize:12,color:t.muted,marginBottom:14}}>Saved to profile for AI-powered task matching</p>
-            <div style={{display:"flex",flexWrap:"wrap",gap:9}}>
-              {INTS.map(tag=>{
-                const on=form.interests.includes(tag.id);
-                return(
-                  <button key={tag.id} className="press" onClick={()=>togInt(tag.id)}
-                    style={{display:"flex",alignItems:"center",gap:7,padding:"8px 16px",borderRadius:99,
-                      background:on?`${tag.color}22`:`${t.secondary}`,
-                      color:on?tag.color:t.muted,
-                      border:`1.5px solid ${on?tag.color+"55":t.border}`,
-                      cursor:"pointer",fontSize:13,fontWeight:on?700:400,
-                      transition:"all .18s",
-                      boxShadow:on?`0 0 12px ${tag.color}30`:"none",
-                    }}>
-                    <I n={on?"check":tag.ic} s={12} c="currentColor"/>{tag.label}
-                  </button>
-                );
-              })}
-            </div>
-
-            {form.interests.includes("other") && (
-              <div style={{marginTop:10}}>
-                <GlassInp
-                  label="Custom Category"
-                  ic="edit"
-                  value={customInterest}
-                  onChange={(e:any)=>{setCustomInterest(e.target.value);setErr((p:any)=>({...p,customInterest:""}));}}
-                  placeholder="Type your category (e.g. Drone Setup, Event Support)"
-                  t={t}
-                  err={err.customInterest}
-                />
+          {role==="helper" && (
+            <div style={{marginTop:24,paddingTop:20,borderTop:`1px solid ${t.border}`}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
+                <I n="sparkles" s={14} c={t.primary}/>
+                <span style={{fontSize:13,fontWeight:700,color:t.text}}>Your Skills & Services</span>
               </div>
-            )}
-          </div>
+              <p style={{fontSize:12,color:t.muted,marginBottom:14}}>Saved to profile for AI-powered task matching</p>
+              <div style={{display:"flex",flexWrap:"wrap",gap:9}}>
+                {INTS.map(tag=>{
+                  const on=form.interests.includes(tag.id);
+                  return(
+                    <button key={tag.id} className="press" onClick={()=>togInt(tag.id)}
+                      style={{display:"flex",alignItems:"center",gap:7,padding:"8px 16px",borderRadius:99,
+                        background:on?`${tag.color}22`:`${t.secondary}`,
+                        color:on?tag.color:t.muted,
+                        border:`1.5px solid ${on?tag.color+"55":t.border}`,
+                        cursor:"pointer",fontSize:13,fontWeight:on?700:400,
+                        transition:"all .18s",
+                        boxShadow:on?`0 0 12px ${tag.color}30`:"none",
+                      }}>
+                      <I n={on?"check":tag.ic} s={12} c="currentColor"/>{tag.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {err.interests&&<p style={{fontSize:11,color:t.danger,marginTop:8,fontWeight:600}}>⚠ {err.interests}</p>}
+
+              {form.interests.includes("other") && (
+                <div style={{marginTop:10}}>
+                  <GlassInp
+                    label="Custom Category"
+                    ic="edit"
+                    value={customInterest}
+                    onChange={(e:any)=>{setCustomInterest(e.target.value);setErr((p:any)=>({...p,customInterest:""}));}}
+                    placeholder="Type your category (e.g. Drone Setup, Event Support)"
+                    t={t}
+                    err={err.customInterest}
+                  />
+                </div>
+              )}
+            </div>
+          )}
 
           {(authError||configError)&&<p style={{fontSize:12,color:t.danger,fontWeight:600,textAlign:"center",marginTop:12}}>⚠ {authError||configError}</p>}
           <button className="press" onClick={submit} disabled={authLoading}
@@ -1497,8 +1513,8 @@ function Dashboard({t,user,setPage,postedTasks,currentUid,focusTab,onFocusTabHan
       )}
 
       {taskToDelete && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.28)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:120,padding:16}}>
-          <GCard t={t} style={{width:"min(94vw,460px)",padding:"18px 18px"}}>
+        <div style={{position:"fixed",inset:0,display:"flex",alignItems:"center",justifyContent:"center",zIndex:120,padding:16,background:t.mode==="dark"?"rgba(6,6,16,0.62)":"rgba(16,20,32,0.34)",backdropFilter:"blur(8px) saturate(120%)",WebkitBackdropFilter:"blur(8px) saturate(120%)",isolation:"isolate"}}>
+          <GCard t={t} style={{width:"min(94vw,460px)",padding:"18px 18px",background:t.mode==="dark"?"rgba(13,10,31,0.96)":"rgba(255,255,255,0.97)",border:`1px solid ${t.borderStrong || t.border}`,boxShadow:"0 24px 60px rgba(0,0,0,0.34)",backdropFilter:"none",WebkitBackdropFilter:"none"}}>
             <h4 style={{fontSize:18,fontWeight:800,color:t.text,marginBottom:10}}>Delete Task</h4>
             <p style={{fontSize:14,color:t.sub,lineHeight:1.6}}>Are you sure you want to delete this task?</p>
             <p style={{fontSize:13,color:t.text,fontWeight:700,marginTop:8}}>{taskToDelete?.title}</p>
@@ -1557,8 +1573,11 @@ const isProfileComplete = (profile:any) => {
     profile.role,
   ];
   const hasRequired = required.every((value) => String(value || "").trim().length > 0);
-  const hasInterests = Array.isArray(profile.interests) && profile.interests.length > 0;
-  return hasRequired && hasInterests;
+  if (profile.role === "helper") {
+    const hasInterests = Array.isArray(profile.interests) && profile.interests.length > 0;
+    return hasRequired && hasInterests;
+  }
+  return hasRequired;
 };
 
 const convIdForTask = (taskId:string, uidA:string, uidB:string) => {
@@ -1569,6 +1588,7 @@ const convIdForTask = (taskId:string, uidA:string, uidB:string) => {
 function PostTask({t,setPage,currentUser}:any){
   const [title,setTitle]=useState("");
   const [category,setCategory]=useState("General");
+  const [customCategory,setCustomCategory]=useState("");
   const [location,setLocation]=useState("");
   const [taskDate,setTaskDate]=useState("");
   const [taskTime,setTaskTime]=useState("");
@@ -1577,9 +1597,103 @@ function PostTask({t,setPage,currentUser}:any){
   const [posted,setPosted]=useState(false);
   const [saving,setSaving]=useState(false);
   const [error,setError]=useState("");
+  const [taskCoords,setTaskCoords]=useState<{lat:number;lng:number}|null>(null);
+  const [helpers,setHelpers]=useState<any[]>([]);
+  const [helpersLoading,setHelpersLoading]=useState(true);
+  const [geoBusy,setGeoBusy]=useState(false);
+
+  useEffect(()=>{
+    let mounted = true;
+    setHelpersLoading(true);
+    getHelperProfiles()
+      .then((rows)=>{
+        if(!mounted) return;
+        setHelpers(rows);
+      })
+      .catch(()=>{
+        if(!mounted) return;
+        setHelpers([]);
+      })
+      .finally(()=>{
+        if(!mounted) return;
+        setHelpersLoading(false);
+      });
+
+    return ()=>{
+      mounted = false;
+    };
+  },[]);
+
+  const effectiveCategory = category === "Other" ? (customCategory.trim() || "Other") : category;
+
+  const recommendedHelpers = useMemo(()=>{
+    if(!helpers.length) return [];
+    const taskLike:any = {
+      category: effectiveCategory,
+      schedule: {
+        date: taskDate || new Date().toISOString().slice(0,10),
+        time: taskTime || "12:00",
+      },
+      location: taskCoords ? {
+        address: location.trim() || "Selected location",
+        city: "Unknown",
+        lat: taskCoords.lat,
+        lng: taskCoords.lng,
+      } : undefined,
+    };
+
+    const byId = new Map(helpers.map((helper:any)=>[helper.id,helper]));
+    return rankHelpersForTask(taskLike, helpers)
+      .map((ranked)=>{
+        const helper:any = byId.get(ranked.helperId);
+        if(!helper) return null;
+        const hasDistance = Boolean(taskCoords && helper?.location);
+        const km = hasDistance
+          ? distanceKm(taskCoords!.lat, taskCoords!.lng, helper.location.lat, helper.location.lng)
+          : null;
+        return {
+          id: helper.id,
+          name: helper.name || "Helper",
+          score: ranked.score,
+          distanceKm: km,
+        };
+      })
+      .filter(Boolean);
+  },[helpers,effectiveCategory,taskDate,taskTime,taskCoords,location]);
+
+  const handleUseCurrentLocation = () => {
+    if (!navigator?.geolocation) {
+      setError("Geolocation is not available on this browser");
+      return;
+    }
+
+    setGeoBusy(true);
+    setError("");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const next = {
+          lat: Number(pos.coords.latitude.toFixed(6)),
+          lng: Number(pos.coords.longitude.toFixed(6)),
+        };
+        setTaskCoords(next);
+        setLocation((prev)=>prev.trim() ? prev : `${next.lat}, ${next.lng}`);
+        setGeoBusy(false);
+      },
+      () => {
+        setError("Could not read your location. Please allow GPS permission.");
+        setGeoBusy(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
 
   const submit=async(e:any)=>{
     e.preventDefault();
+    const selectedCategory = category === "Other" ? customCategory.trim() : category;
+    if (category === "Other" && !customCategory.trim()) {
+      setError("Please specify category when selecting Other");
+      return;
+    }
     if(!title.trim()||!location.trim()||!description.trim()||!taskDate||!taskTime) return;
     if(!firestore || !currentUser?.uid){
       setError("Please sign in again before posting a task.");
@@ -1588,16 +1702,17 @@ function PostTask({t,setPage,currentUser}:any){
     setSaving(true);
     setError("");
     try{
+      const recommendedHelperIds = recommendedHelpers.slice(0,5).map((helper:any)=>helper.id);
       await createTask({
         title: title.trim(),
         description: description.trim(),
-        category,
+        category: selectedCategory,
         paymentOptional: null,
         location: {
           address: location.trim(),
           city: "Unknown",
-          lat: 0,
-          lng: 0,
+          lat: taskCoords?.lat || 0,
+          lng: taskCoords?.lng || 0,
         },
         schedule: {
           date: taskDate,
@@ -1605,6 +1720,7 @@ function PostTask({t,setPage,currentUser}:any){
         },
         posterId: currentUser.uid,
         posterName: currentUser.name || "User",
+        recommendedHelpers: recommendedHelperIds,
       });
     } catch (e:any){
       setError(e?.message || "Failed to post task");
@@ -1635,7 +1751,10 @@ function PostTask({t,setPage,currentUser}:any){
               <I n="checkC" s={18} c={t.accent}/>
               <div>
                 <div style={{fontSize:14,fontWeight:700,color:t.text}}>Task posted successfully</div>
-                <div style={{fontSize:12,color:t.muted}}>Helpers can now find your task in Requests.</div>
+                <div style={{fontSize:12,color:t.muted}}>
+                  Helpers can now find your task in Requests.
+                  {recommendedHelpers.length>0 ? ` Top ${Math.min(3,recommendedHelpers.length)} nearest helpers were shortlisted.` : ""}
+                </div>
               </div>
             </div>
             <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
@@ -1662,10 +1781,18 @@ function PostTask({t,setPage,currentUser}:any){
                 <label style={{fontSize:12,fontWeight:700,color:t.sub}}>Category</label>
                 <select value={category} onChange={e=>setCategory(e.target.value)}
                   style={{width:"100%",padding:"12px 14px",borderRadius:12,background:t.input,border:`1.5px solid ${t.border}`,color:t.text,fontSize:14,outline:"none"}}>
-                  {["General","Repair","Tutoring","Delivery","Tech","Pet Care","Cleaning"].map(c=>(
+                  {["General","Repair","Tutoring","Delivery","Tech","Pet Care","Cleaning","Cooking","Other"].map(c=>(
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
+                {category==="Other" && (
+                  <input
+                    value={customCategory}
+                    onChange={e=>setCustomCategory(e.target.value)}
+                    placeholder="Please specify"
+                    style={{width:"100%",padding:"12px 14px",borderRadius:12,background:t.input,border:`1.5px solid ${t.border}`,color:t.text,fontSize:14,outline:"none"}}
+                  />
+                )}
               </div>
             </div>
 
@@ -1674,6 +1801,16 @@ function PostTask({t,setPage,currentUser}:any){
               <input value={location} onChange={e=>setLocation(e.target.value)} placeholder="Area, city"
                 style={{width:"100%",padding:"12px 14px",borderRadius:12,background:t.input,border:`1.5px solid ${t.border}`,color:t.text,fontSize:14,outline:"none"}}/>
             </div>
+
+            <HelperMapCard
+              t={t}
+              locationLabel={location.trim() || "No address selected"}
+              taskCoords={taskCoords}
+              helpers={recommendedHelpers as any[]}
+              loading={helpersLoading}
+              geoBusy={geoBusy}
+              onUseCurrentLocation={handleUseCurrentLocation}
+            />
 
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
               <div style={{display:"grid",gap:8}}>
@@ -1937,6 +2074,27 @@ function Bidding({t,currentUser,setPage}:any){
   const [loading,setLoading]=useState(true);
   const [actionError,setActionError]=useState("");
 
+  const helperSkillSet = useMemo(()=>{
+    const interests = Array.isArray(currentUser?.interests) ? currentUser.interests : [];
+    const helperMetaSkills = Array.isArray(currentUser?.helperMeta?.skills) ? currentUser.helperMeta.skills : [];
+    return new Set(
+      [...interests, ...helperMetaSkills]
+        .map((s:string)=>String(s || "").trim().toLowerCase())
+        .filter(Boolean)
+    );
+  },[currentUser?.interests, currentUser?.helperMeta?.skills]);
+
+  const taskMatchesHelperSkills = useCallback((task:any)=>{
+    if (helperSkillSet.size === 0) return false;
+    const category = String(task?.category || "").trim().toLowerCase();
+    for (const skill of helperSkillSet) {
+      if (category === skill || category.includes(skill) || skill.includes(category)) {
+        return true;
+      }
+    }
+    return false;
+  },[helperSkillSet]);
+
   if(currentUser?.role === "user"){
     return(
       <div className="su" style={{padding:"20px 0",maxWidth:720}}>
@@ -1961,7 +2119,8 @@ function Bidding({t,currentUser,setPage}:any){
           if (x.posterId===currentUser.uid) return false;
           const hasMyBid = Boolean(myBids[x.id]);
           const acceptedForMe = x.acceptedBy===currentUser.uid && ["accepted","in_progress","completion_requested"].includes(x.status);
-          return x.status==="open" || acceptedForMe || hasMyBid;
+          const skillMatchedOpen = x.status==="open" && taskMatchesHelperSkills(x);
+          return skillMatchedOpen || acceptedForMe || hasMyBid;
         });
       setTasks(rows);
       setLoading(false);
@@ -1972,7 +2131,7 @@ function Bidding({t,currentUser,setPage}:any){
       setMyBids(next);
     });
     return ()=>{unsubTasks();unsubBids();};
-  },[currentUser?.uid]);
+  },[currentUser?.uid, myBids, taskMatchesHelperSkills]);
 
   const placeBid = async (task:any) => {
     if(!firestore || !currentUser?.uid) return;
@@ -2060,6 +2219,11 @@ function Bidding({t,currentUser,setPage}:any){
         <p style={{color:t.sub,marginTop:5,fontSize:14}}>
           {loading ? "Loading requests..." : `${visibleTasks.length} ${tab} request${visibleTasks.length===1?"":"s"}`}
         </p>
+        {helperSkillSet.size===0 && (
+          <p style={{color:t.warn,marginTop:6,fontSize:12,fontWeight:700}}>
+            Add at least one skill in your helper profile to receive matching open tasks.
+          </p>
+        )}
       </div>
       <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
         {[

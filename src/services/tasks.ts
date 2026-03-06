@@ -35,6 +35,7 @@ export type CreateTaskInput = {
   paymentOptional: number | null;
   posterId: string;
   posterName: string;
+  recommendedHelpers?: string[];
 };
 
 type TaskWithId = TaskDoc & { id: string };
@@ -48,14 +49,16 @@ function assertFirestore() {
 export async function createTask(input: CreateTaskInput): Promise<string> {
   assertFirestore();
 
+  const { recommendedHelpers = [], ...taskPayload } = input;
+
   const created = await addDoc(collection(firestore!, "tasks"), {
-    ...input,
+    ...taskPayload,
     acceptedBy: null,
     acceptedBidId: null,
     status: "open",
     paymentStatus: "pending",
     paymentMethod: null,
-    recommendedHelpers: [],
+    recommendedHelpers,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });

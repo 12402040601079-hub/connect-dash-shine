@@ -8,6 +8,18 @@ MicroLink is a React + TypeScript + Vite frontend project with shadcn-ui and Tai
 2. Fill all `VITE_FIREBASE_*` values with your Firebase project keys.
 3. Enable Email/Password and Google/Apple sign-in providers in Firebase Auth console if you want to use those login options.
 
+## Maps setup (optional but recommended)
+
+1. Open your `.env` file.
+2. Add your maps key to `VITE_MAPS_API_KEY`.
+3. Optionally set `VITE_MAPS_EMBED_URL_TEMPLATE` if you want to render a specific map provider URL in iframes.
+
+Template placeholders supported:
+- `{lat}`
+- `{lng}`
+- `{zoom}`
+- `{key}`
+
 ## Firestore rules
 
 1. Install Firebase CLI if needed: `npm i -g firebase-tools`
