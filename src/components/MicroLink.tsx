@@ -19,15 +19,15 @@ import {
   cancelTask,
   confirmCompletion,
   createTask,
+  markTaskPaid,
   requestCompletion,
   watchMyPostedTasks,
 } from "@/services/tasks";
 import { counterBid, placeBid as placeTaskBid, updateBidStatus } from "@/services/bids";
-import { getMyNotifications, markNotificationRead } from "@/services/notifications";
+import { getMyNotifications, markNotificationRead, notify } from "@/services/notifications";
 import { submitRating } from "@/services/ratings";
 import BidList from "@/components/workflow/BidList";
 import CompletionPanel from "@/components/workflow/CompletionPanel";
-import NotificationsPanel from "@/components/workflow/NotificationsPanel";
 import RatingDialog from "@/components/workflow/RatingDialog";
 
 /* ═══════════════════════════════════════════════════════
@@ -976,21 +976,33 @@ function TopBar({t,user,online,setOnline,setPage,onSignOut,unreadCount}:any){
 /* ═══════════════════════════════════════════════════════
    DASHBOARD
 ═══════════════════════════════════════════════════════ */
-function Dashboard({t,user,setPage,postedTasks,currentUid}:any){
+function Dashboard({t,user,setPage,postedTasks,currentUid,focusTab,onFocusTabHandled}:any){
   const visiblePostedTasks=(postedTasks||[]).filter((task:any)=>task?.status!=="cancelled");
   const activeTaskCount=visiblePostedTasks.length;
   const completedCount=visiblePostedTasks.filter((task:any)=>task?.status==="completed").length;
   const ratingValue = user?.stats?.ratingAvg ? Number(user.stats.ratingAvg).toFixed(1) : "—";
+  const [dashboardTab,setDashboardTab]=useState(user?.role==="helper"?"orders":"tasks");
   const [bidsByTask,setBidsByTask]=useState<any>({});
+  const [assignedTasks,setAssignedTasks]=useState<any[]>([]);
   const [dashError,setDashError]=useState("");
-  const [ratingTask,setRatingTask]=useState<any>(null);
-  const [ratingSubmitting,setRatingSubmitting]=useState(false);
   const [taskToDelete,setTaskToDelete]=useState<any>(null);
   const [deleteBusy,setDeleteBusy]=useState(false);
+  const [paymentTask,setPaymentTask]=useState<any>(null);
+  const [paymentMethod,setPaymentMethod]=useState<"upi_qr"|"card"|"netbanking">("upi_qr");
+  const [paymentBusy,setPaymentBusy]=useState(false);
+  const [paymentFields,setPaymentFields]=useState<any>({upi:"",cardNumber:"",nameOnCard:"",expiry:"",cvv:"",bank:""});
+  const [ratingTarget,setRatingTarget]=useState<any>(null);
+  const [ratingSubmitting,setRatingSubmitting]=useState(false);
   const greeting=()=>{const h=new Date().getHours();return h<12?"Good morning":h<17?"Good afternoon":"Good evening";};
 
   useEffect(()=>{
-    if(!firestore || !currentUid) return;
+    if(!focusTab) return;
+    setDashboardTab(focusTab);
+    onFocusTabHandled?.();
+  },[focusTab,onFocusTabHandled]);
+
+  useEffect(()=>{
+    if(!firestore || !currentUid || user?.role!=="user") return;
     const unsub = onSnapshot(query(collection(firestore, "bids"), where("posterId", "==", currentUid), orderBy("createdAt", "desc")), snap=>{
       const next:any = {};
       snap.docs.forEach(d=>{
@@ -1002,7 +1014,23 @@ function Dashboard({t,user,setPage,postedTasks,currentUid}:any){
       setBidsByTask(next);
     });
     return ()=>unsub();
-  },[currentUid]);
+  },[currentUid,user?.role]);
+
+  useEffect(()=>{
+    if(!firestore || !currentUid || user?.role!=="helper") return;
+    const unsub = onSnapshot(query(collection(firestore, "tasks"), where("acceptedBy", "==", currentUid), orderBy("createdAt", "desc")), snap=>{
+      setAssignedTasks(snap.docs.map(d=>({id:d.id,...d.data()})));
+    });
+    return ()=>unsub();
+  },[currentUid,user?.role]);
+
+  const findBidById = (bidId:string) => {
+    for (const rows of Object.values(bidsByTask) as any[]) {
+      const hit = (rows || []).find((row:any)=>row.id===bidId);
+      if (hit) return hit;
+    }
+    return null;
+  };
 
   const handleAcceptBid = async (task:any, bidId:string) => {
     const selected = (bidsByTask?.[task.id] || []).find((row:any)=>row.id===bidId);
@@ -1017,31 +1045,25 @@ function Dashboard({t,user,setPage,postedTasks,currentUid}:any){
         currentStatus: task.status,
         taskTitle: task.title,
       });
+      setDashboardTab("orders");
     }catch(e:any){
       setDashError(e?.message || "Failed to accept bid");
     }
   };
 
-  const handleConfirmCompletion = async (task:any) => {
-    if(!task?.acceptedBy) return;
-    setDashError("");
-    try{
-      await confirmCompletion({
-        taskId: task.id,
-        helperId: task.acceptedBy,
-        posterId: currentUid,
-        currentStatus: task.status,
-        taskTitle: task.title,
-      });
-    }catch(e:any){
-      setDashError(e?.message || "Failed to confirm completion");
-    }
-  };
-
   const handleRejectBid = async (bidId:string) => {
+    const bid = findBidById(bidId);
     setDashError("");
     try {
       await updateBidStatus(bidId, "rejected");
+      if (bid?.helperId) {
+        await notify(bid.helperId, {
+          type: "admin_alert",
+          title: "Bid rejected",
+          body: `Your bid on \"${bid.taskId}\" was rejected by the user.`,
+          ref: { taskId: bid.taskId, bidId },
+        });
+      }
     } catch (e:any) {
       setDashError(e?.message || "Failed to reject bid");
     }
@@ -1063,34 +1085,20 @@ function Dashboard({t,user,setPage,postedTasks,currentUid}:any){
     }
   };
 
-  const submitTaskRating = async (stars:number, review:string) => {
-    if(!ratingTask?.acceptedBy || !currentUid) return;
-    setRatingSubmitting(true);
+  const handleConfirmCompletion = async (task:any) => {
+    if(!task?.acceptedBy) return;
     setDashError("");
-    try {
-      const ratingId = `${ratingTask.id}_${currentUid}_${ratingTask.acceptedBy}`;
-      if (firestore) {
-        const existing = await getDoc(doc(firestore, "ratings", ratingId));
-        if (existing.exists()) {
-          setDashError("Rating already submitted for this task.");
-          setRatingSubmitting(false);
-          setRatingTask(null);
-          return;
-        }
-      }
-
-      await submitRating({
-        taskId: ratingTask.id,
-        fromUserId: currentUid,
-        toUserId: ratingTask.acceptedBy,
-        stars,
-        review,
+    try{
+      await confirmCompletion({
+        taskId: task.id,
+        helperId: task.acceptedBy,
+        posterId: currentUid,
+        currentStatus: task.status,
+        taskTitle: task.title,
       });
-      setRatingTask(null);
-    } catch (e:any) {
-      setDashError(e?.message || "Failed to submit rating");
+    }catch(e:any){
+      setDashError(e?.message || "Failed to confirm completion");
     }
-    setRatingSubmitting(false);
   };
 
   const handleDeleteTask = async () => {
@@ -1112,46 +1120,85 @@ function Dashboard({t,user,setPage,postedTasks,currentUid}:any){
     setDeleteBusy(false);
   };
 
+  const handlePayment = async () => {
+    if(!paymentTask || !currentUid || !paymentTask.acceptedBy) return;
+    setPaymentBusy(true);
+    setDashError("");
+    try {
+      await markTaskPaid({
+        taskId: paymentTask.id,
+        posterId: currentUid,
+        helperId: paymentTask.acceptedBy,
+        currentStatus: paymentTask.status,
+        taskTitle: paymentTask.title,
+        method: paymentMethod,
+      });
+      setPaymentTask(null);
+      setDashboardTab("orders");
+    } catch (e:any) {
+      setDashError(e?.message || "Payment could not be processed");
+    }
+    setPaymentBusy(false);
+  };
+
+  const submitTaskRating = async (stars:number, review:string) => {
+    if(!ratingTarget?.toUserId || !currentUid) return;
+    setRatingSubmitting(true);
+    setDashError("");
+    try {
+      const ratingId = `${ratingTarget.taskId}_${currentUid}_${ratingTarget.toUserId}`;
+      if (firestore) {
+        const existing = await getDoc(doc(firestore, "ratings", ratingId));
+        if (existing.exists()) {
+          setDashError("Rating already submitted for this task.");
+          setRatingSubmitting(false);
+          setRatingTarget(null);
+          return;
+        }
+      }
+
+      await submitRating({
+        taskId: ratingTarget.taskId,
+        fromUserId: currentUid,
+        toUserId: ratingTarget.toUserId,
+        stars,
+        review,
+      });
+      setRatingTarget(null);
+    } catch (e:any) {
+      setDashError(e?.message || "Failed to submit rating");
+    }
+    setRatingSubmitting(false);
+  };
+
+  const userBidTasks = visiblePostedTasks.filter((task:any)=>(bidsByTask?.[task.id]||[]).length>0);
+  const userOrders = visiblePostedTasks.filter((task:any)=>task?.acceptedBy && !["cancelled"].includes(task?.status));
+  const helperOrders = assignedTasks.filter((task:any)=>!["cancelled"].includes(task?.status));
+
   const stats=[
-    {label:user?.role==="helper"?"Tasks Completed":"Tasks Posted",val:activeTaskCount,ic:"checkC",badge:activeTaskCount>0?"Updated":"Post your first task",col:t.accent},
-    {label:"Completed",val:completedCount,ic:"clock",badge:completedCount>0?"Great progress":"No completions yet",col:t.warn},
+    {label:user?.role==="helper"?"Assigned Orders":"Tasks Posted",val:user?.role==="helper"?helperOrders.length:activeTaskCount,ic:"checkC",badge:"Updated",col:t.accent},
+    {label:"Completed",val:user?.role==="helper"?helperOrders.filter((task:any)=>task.status==="completed").length:completedCount,ic:"clock",badge:"Progress",col:t.warn},
     {label:"Rating",val:ratingValue,ic:"star",badge:ratingValue==="—"?"No reviews yet":"Live",col:"#fbbf24"},
   ];
 
-  const quickActions = user?.role==="helper"
-    ? [
-      {label:"Open Requests",ic:"tag",col:t.primary,target:"requests"},
-      {label:"Accepted Requests",ic:"check",col:t.accent,target:"requests"},
-      {label:"Check Messages",ic:"msg",col:"#3b82f6",target:"chat"},
-    ]
-    : [
-      {label:"Post Task",ic:"plus",col:t.primary,target:"post-task"},
-      {label:"Manage Tasks",ic:"brief",col:t.accent,target:"dashboard"},
-      {label:"Messages",ic:"msg",col:"#3b82f6",target:"chat"},
-    ];
+  const tabs = user?.role==="helper"
+    ? [{id:"orders",label:"Orders"}]
+    : [{id:"tasks",label:"My Tasks"},{id:"bids",label:"Bid Alerts"},{id:"orders",label:"Orders"}];
 
   return(
     <div className="su" style={{padding:"20px 0",maxWidth:920}}>
       <div style={{marginBottom:28}}>
         <p style={{fontSize:13,color:t.muted,fontWeight:600,marginBottom:6}}>{greeting()}, {new Date().toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long"})}</p>
-        <h2 style={{fontFamily:"Poppins",fontSize:28,fontWeight:800,color:t.text,letterSpacing:"-0.5px"}}>
-          Welcome back, {user?.name?.split(" ")[0]} 👋
-        </h2>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginTop:8}}>
-          <span style={{padding:"3px 12px",borderRadius:99,fontSize:11,fontWeight:700,background:user?.role==="helper"?`${t.accent}20`:`${t.primary}20`,color:user?.role==="helper"?t.accent:t.primary,border:`1px solid ${user?.role==="helper"?t.accent+"40":t.primary+"40"}`}}>
-            {user?.role==="helper"?"⚡ Helper":"👤 User"}
-          </span>
-          <span style={{fontSize:12,color:t.muted}}>Joined {user?.joinedDate}</span>
-        </div>
+        <h2 style={{fontFamily:"Poppins",fontSize:28,fontWeight:800,color:t.text,letterSpacing:"-0.5px"}}>Welcome back, {user?.name?.split(" ")[0]} 👋</h2>
       </div>
 
       {dashError&&<p style={{fontSize:12,color:t.danger,fontWeight:700,marginBottom:12}}>⚠ {dashError}</p>}
 
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))",gap:14,marginBottom:28}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))",gap:14,marginBottom:20}}>
         {stats.map((s,i)=>(
           <GCard key={s.label} t={t} className={`su${i}`} style={{padding:"20px 20px"}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
-              <div style={{width:42,height:42,borderRadius:13,background:`${s.col}18`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 0 16px ${s.col}30`}}>
+              <div style={{width:42,height:42,borderRadius:13,background:`${s.col}18`,display:"flex",alignItems:"center",justifyContent:"center"}}>
                 <I n={s.ic} s={18} c={s.col}/>
               </div>
               <span style={{fontSize:10,fontWeight:800,color:s.col,background:`${s.col}15`,padding:"3px 9px",borderRadius:99,border:`1px solid ${s.col}30`}}>{s.badge}</span>
@@ -1162,22 +1209,17 @@ function Dashboard({t,user,setPage,postedTasks,currentUid}:any){
         ))}
       </div>
 
-      <div style={{marginBottom:24}}>
-        <h3 style={{fontFamily:"Poppins",fontSize:15,fontWeight:700,color:t.text,marginBottom:13}}>Quick Actions</h3>
-        <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-          {quickActions.map(a=>(
-            <button key={a.label} className="press hover-lift"
-              onClick={()=>setPage(a.target)}
-              style={{display:"flex",alignItems:"center",gap:8,padding:"10px 18px",borderRadius:12,background:`${a.col}12`,color:a.col,border:`1.5px solid ${a.col}30`,cursor:"pointer",fontSize:13,fontWeight:700,backdropFilter:"blur(8px)"}}>
-              <I n={a.ic} s={14} c={a.col}/>{a.label}
-            </button>
-          ))}
-        </div>
+      <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+        {tabs.map((tab:any)=>(
+          <button key={tab.id} className="press" onClick={()=>setDashboardTab(tab.id)}
+            style={{padding:"7px 12px",borderRadius:99,border:`1px solid ${dashboardTab===tab.id?t.primary+"66":t.border}`,background:dashboardTab===tab.id?`${t.primary}18`:t.secondary,color:dashboardTab===tab.id?t.primary:t.muted,fontSize:12,fontWeight:700,cursor:"pointer"}}>
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      <div style={{marginBottom:24}}>
-        <h3 style={{fontFamily:"Poppins",fontSize:15,fontWeight:700,color:t.text,marginBottom:13}}>My Posted Tasks</h3>
-        <GCard t={t} style={{padding:"10px 0",overflow:"hidden"}}>
+      {dashboardTab==="tasks" && user?.role==="user" && (
+        <GCard t={t} style={{padding:"10px 0",overflow:"hidden",marginBottom:16}}>
           {activeTaskCount===0?(
             <div style={{padding:"18px 20px",color:t.muted,fontSize:13}}>No tasks posted yet. Use <strong>Post Task</strong> to create your first task.</div>
           ):visiblePostedTasks.map((task:any,i:number,arr:any[])=>(
@@ -1195,81 +1237,162 @@ function Dashboard({t,user,setPage,postedTasks,currentUid}:any){
                   <div style={{fontSize:12,fontWeight:700,color:t.muted}}>Flexible pay</div>
                   <div style={{fontSize:10,color:t.primary,fontWeight:700,textTransform:"uppercase"}}>{task.status || "open"}</div>
                   {!['completed','closed','cancelled'].includes(task.status || 'open') && (
-                    <button
-                      className="press"
-                      onClick={()=>setTaskToDelete(task)}
-                      style={{
-                        marginTop:8,
-                        minWidth:72,
-                        height:30,
-                        borderRadius:9,
-                        border:`1px solid ${t.danger}45`,
-                        background:`${t.danger}14`,
-                        color:t.danger,
-                        display:"inline-flex",
-                        alignItems:"center",
-                        gap:6,
-                        justifyContent:"center",
-                        cursor:"pointer",
-                        padding:"0 8px",
-                        fontSize:11,
-                        fontWeight:700,
-                      }}
-                      title="Delete task"
-                      aria-label="Delete task"
-                    >
+                    <button className="press" onClick={()=>setTaskToDelete(task)}
+                      style={{marginTop:8,minWidth:72,height:30,borderRadius:9,border:`1px solid ${t.danger}45`,background:`${t.danger}14`,color:t.danger,display:"inline-flex",alignItems:"center",gap:6,justifyContent:"center",cursor:"pointer",padding:"0 8px",fontSize:11,fontWeight:700}}>
                       <I n="trash" s={14} c={t.danger}/>Delete
                     </button>
                   )}
                 </div>
               </div>
-
-              {task.status==="open" && (
-                <div style={{marginTop:10}}>
-                  <BidList
-                    bids={(bidsByTask?.[task.id] || []).map((bid:any)=>(
-                      { id: bid.id, helperName: bid.helperName, amount: bid.amount, note: bid.note, status: bid.status }
-                    ))}
-                    onAccept={(bidId)=>handleAcceptBid(task,bidId)}
-                    onReject={handleRejectBid}
-                    onCounter={handleCounterBid}
-                  />
-                </div>
-              )}
-
-              {task.status!=="open" && task.status!=="completed" && (
-                <div style={{marginTop:10}}>
-                  <CompletionPanel
-                    status={task.status}
-                    isHelper={false}
-                    canRequestCompletion={false}
-                    canConfirmCompletion={task.status==="completion_requested"}
-                    onRequestCompletion={()=>undefined}
-                    onConfirmCompletion={()=>handleConfirmCompletion(task)}
-                  />
-                </div>
-              )}
-
-              {task.status==="completed" && task.acceptedBy && (
-                <div style={{marginTop:10,display:"flex",justifyContent:"flex-end"}}>
-                  <button className="press" onClick={()=>setRatingTask(task)}
-                    style={{padding:"7px 11px",borderRadius:10,background:`${t.accent}18`,color:t.accent,border:`1px solid ${t.accent}35`,fontSize:11,fontWeight:700,cursor:"pointer"}}>
-                    Rate Helper
-                  </button>
-                </div>
-              )}
             </div>
           ))}
         </GCard>
-      </div>
+      )}
+
+      {dashboardTab==="bids" && user?.role==="user" && (
+        <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:16}}>
+          {userBidTasks.length===0 && <GCard t={t} style={{padding:16,fontSize:13,color:t.muted}}>No bids yet. Helpers will appear here after they place bids.</GCard>}
+          {userBidTasks.map((task:any)=>(
+            <GCard key={task.id} t={t} style={{padding:14}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,gap:8}}>
+                <div>
+                  <div style={{fontSize:14,fontWeight:700,color:t.text}}>{task.title}</div>
+                  <div style={{fontSize:11,color:t.muted}}>{taskLocationLabel(task)}</div>
+                </div>
+                <span style={{fontSize:10,fontWeight:700,color:t.primary,textTransform:"uppercase"}}>{task.status}</span>
+              </div>
+              <BidList
+                bids={(bidsByTask?.[task.id] || []).map((bid:any)=>({ id: bid.id, helperName: bid.helperName, amount: bid.amount, note: bid.note, status: bid.status }))}
+                onAccept={(bidId)=>handleAcceptBid(task,bidId)}
+                onReject={handleRejectBid}
+                onCounter={handleCounterBid}
+              />
+            </GCard>
+          ))}
+        </div>
+      )}
+
+      {dashboardTab==="orders" && (
+        <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:16}}>
+          {(user?.role==="user"?userOrders:helperOrders).length===0 && (
+            <GCard t={t} style={{padding:16,fontSize:13,color:t.muted}}>No active orders yet.</GCard>
+          )}
+          {(user?.role==="user"?userOrders:helperOrders).map((task:any)=>(
+            <GCard key={task.id} t={t} style={{padding:14}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap"}}>
+                <div>
+                  <div style={{fontSize:14,fontWeight:700,color:t.text}}>{task.title}</div>
+                  <div style={{fontSize:11,color:t.muted,marginTop:3}}>{taskLocationLabel(task)}</div>
+                  <div style={{fontSize:11,color:t.muted,marginTop:3}}>Status: {task.status}</div>
+                </div>
+                <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                  <span style={{fontSize:10,fontWeight:700,padding:"4px 8px",borderRadius:99,border:`1px solid ${task.paymentStatus==="paid"?t.accent+"50":t.border}`,background:task.paymentStatus==="paid"?`${t.accent}16`:t.secondary,color:task.paymentStatus==="paid"?t.accent:t.muted}}>
+                    {task.paymentStatus==="paid"?"Payment Success":"Payment Pending"}
+                  </span>
+                  {user?.role==="user" && task.paymentStatus!=="paid" && (
+                    <button className="press" onClick={()=>setPaymentTask(task)}
+                      style={{padding:"7px 11px",borderRadius:10,background:`linear-gradient(135deg,${t.primary},${t.accent})`,color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                      Pay Now
+                    </button>
+                  )}
+                  {user?.role==="user" && task.status==="completion_requested" && (
+                    <button className="press" onClick={()=>handleConfirmCompletion(task)}
+                      style={{padding:"7px 11px",borderRadius:10,background:`${t.accent}18`,color:t.accent,border:`1px solid ${t.accent}35`,fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                      Confirm Completion
+                    </button>
+                  )}
+                  {task.status==="completed" && task.acceptedBy && user?.role==="user" && (
+                    <button className="press" onClick={()=>setRatingTarget({taskId:task.id,toUserId:task.acceptedBy,label:"Helper"})}
+                      style={{padding:"7px 11px",borderRadius:10,background:`${t.accent}18`,color:t.accent,border:`1px solid ${t.accent}35`,fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                      Rate Helper
+                    </button>
+                  )}
+                  {task.status==="completed" && task.posterId && user?.role==="helper" && (
+                    <button className="press" onClick={()=>setRatingTarget({taskId:task.id,toUserId:task.posterId,label:"User"})}
+                      style={{padding:"7px 11px",borderRadius:10,background:`${t.accent}18`,color:t.accent,border:`1px solid ${t.accent}35`,fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                      Rate User
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {user?.role==="helper" && task.paymentStatus==="paid" && (
+                <div style={{marginTop:10,padding:"10px 12px",borderRadius:10,border:`1px solid ${t.accent}35`,background:`${t.accent}14`,fontSize:12,color:t.accent,fontWeight:700}}>
+                  Payment alert: received. Controls started automatically.
+                </div>
+              )}
+
+              {user?.role==="helper" && (
+                <div style={{marginTop:10}}>
+                  <CompletionPanel
+                    status={task.status}
+                    isHelper
+                    canRequestCompletion={task.status==="accepted"||task.status==="in_progress"}
+                    canConfirmCompletion={false}
+                    onRequestCompletion={()=>requestCompletion({taskId:task.id,helperId:currentUid,posterId:task.posterId,currentStatus:task.status,taskTitle:task.title})}
+                    onConfirmCompletion={()=>undefined}
+                  />
+                </div>
+              )}
+            </GCard>
+          ))}
+        </div>
+      )}
 
       <RatingDialog
-        open={Boolean(ratingTask)}
-        helperName={ratingTask?.acceptedBy || "helper"}
+        open={Boolean(ratingTarget)}
+        helperName={ratingTarget?.label || "User"}
         submitting={ratingSubmitting}
-        onClose={()=>setRatingTask(null)}
+        onClose={()=>setRatingTarget(null)}
         onSubmit={submitTaskRating}
       />
+
+      {paymentTask && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.28)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:120,padding:16}}>
+          <GCard t={t} style={{width:"min(94vw,520px)",padding:"18px 18px"}}>
+            <h4 style={{fontSize:18,fontWeight:800,color:t.text,marginBottom:8}}>Dummy Payment Module</h4>
+            <p style={{fontSize:12,color:t.muted,marginBottom:12}}>Task: {paymentTask.title}</p>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
+              {[
+                {id:"upi_qr",label:"QR / UPI"},
+                {id:"card",label:"Credit / Debit"},
+                {id:"netbanking",label:"Net Banking"},
+              ].map((m:any)=>(
+                <button key={m.id} className="press" onClick={()=>setPaymentMethod(m.id)}
+                  style={{padding:"6px 10px",borderRadius:99,border:`1px solid ${paymentMethod===m.id?t.primary+"66":t.border}`,background:paymentMethod===m.id?`${t.primary}18`:t.secondary,color:paymentMethod===m.id?t.primary:t.muted,fontSize:12,fontWeight:700,cursor:"pointer"}}>
+                  {m.label}
+                </button>
+              ))}
+            </div>
+            {paymentMethod==="upi_qr" && (
+              <GlassInp t={t} label="UPI Id" value={paymentFields.upi} onChange={(e:any)=>setPaymentFields((p:any)=>({...p,upi:e.target.value}))} placeholder="name@upi"/>
+            )}
+            {paymentMethod==="card" && (
+              <div style={{display:"grid",gap:8}}>
+                <GlassInp t={t} label="Card Number" value={paymentFields.cardNumber} onChange={(e:any)=>setPaymentFields((p:any)=>({...p,cardNumber:e.target.value}))} placeholder="4111 1111 1111 1111"/>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                  <GlassInp t={t} label="Name" value={paymentFields.nameOnCard} onChange={(e:any)=>setPaymentFields((p:any)=>({...p,nameOnCard:e.target.value}))} placeholder="Cardholder"/>
+                  <GlassInp t={t} label="Expiry" value={paymentFields.expiry} onChange={(e:any)=>setPaymentFields((p:any)=>({...p,expiry:e.target.value}))} placeholder="MM/YY"/>
+                  <GlassInp t={t} label="CVV" value={paymentFields.cvv} onChange={(e:any)=>setPaymentFields((p:any)=>({...p,cvv:e.target.value}))} placeholder="123"/>
+                </div>
+              </div>
+            )}
+            {paymentMethod==="netbanking" && (
+              <GlassInp t={t} label="Bank Name" value={paymentFields.bank} onChange={(e:any)=>setPaymentFields((p:any)=>({...p,bank:e.target.value}))} placeholder="Your bank"/>
+            )}
+            <div style={{display:"flex",justifyContent:"flex-end",gap:10,marginTop:14}}>
+              <button className="press" onClick={()=>setPaymentTask(null)} disabled={paymentBusy}
+                style={{padding:"8px 12px",borderRadius:10,background:t.secondary,border:`1px solid ${t.border}`,color:t.text,cursor:"pointer",fontSize:12,fontWeight:700}}>
+                Cancel
+              </button>
+              <button className="press" onClick={handlePayment} disabled={paymentBusy}
+                style={{padding:"8px 12px",borderRadius:10,background:`linear-gradient(135deg,${t.primary},${t.accent})`,border:"none",color:"#fff",cursor:"pointer",fontSize:12,fontWeight:700}}>
+                {paymentBusy ? "Processing..." : "Pay Successfully"}
+              </button>
+            </div>
+          </GCard>
+        </div>
+      )}
 
       {taskToDelete && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.28)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:120,padding:16}}>
@@ -1278,53 +1401,18 @@ function Dashboard({t,user,setPage,postedTasks,currentUid}:any){
             <p style={{fontSize:14,color:t.sub,lineHeight:1.6}}>Are you sure you want to delete this task?</p>
             <p style={{fontSize:13,color:t.text,fontWeight:700,marginTop:8}}>{taskToDelete?.title}</p>
             <div style={{display:"flex",justifyContent:"flex-end",gap:10,marginTop:16}}>
-              <button
-                className="press"
-                onClick={()=>setTaskToDelete(null)}
-                disabled={deleteBusy}
-                style={{padding:"8px 12px",borderRadius:10,background:t.secondary,border:`1px solid ${t.border}`,color:t.text,cursor:"pointer",fontSize:12,fontWeight:700}}
-              >
+              <button className="press" onClick={()=>setTaskToDelete(null)} disabled={deleteBusy}
+                style={{padding:"8px 12px",borderRadius:10,background:t.secondary,border:`1px solid ${t.border}`,color:t.text,cursor:"pointer",fontSize:12,fontWeight:700}}>
                 No
               </button>
-              <button
-                className="press"
-                onClick={handleDeleteTask}
-                disabled={deleteBusy}
-                style={{padding:"8px 12px",borderRadius:10,background:`${t.danger}18`,border:`1px solid ${t.danger}50`,color:t.danger,cursor:"pointer",fontSize:12,fontWeight:700}}
-              >
+              <button className="press" onClick={handleDeleteTask} disabled={deleteBusy}
+                style={{padding:"8px 12px",borderRadius:10,background:`${t.danger}18`,border:`1px solid ${t.danger}50`,color:t.danger,cursor:"pointer",fontSize:12,fontWeight:700}}>
                 {deleteBusy ? "Deleting..." : "Yes"}
               </button>
             </div>
           </GCard>
         </div>
       )}
-
-      <h3 style={{fontFamily:"Poppins",fontSize:15,fontWeight:700,color:t.text,marginBottom:13}}>Your Profile Information</h3>
-      <GCard t={t} style={{overflow:"hidden"}}>
-        {[
-          {label:"Full Name",val:user?.name,ic:"user"},
-          {label:"Email Address",val:user?.email,ic:"mail"},
-          {label:"Phone Number",val:user?.phone,ic:"phone"},
-          {label:"Location",val:user?.address,ic:"pin"},
-          {label:"Age",val:user?.age?`${user.age} years old`:null,ic:"cal"},
-          {label:"Gender",val:user?.gender,ic:"user"},
-          {label:"Account Type",val:user?.role==="helper"?"Helper Account":"User Account",ic:user?.role==="helper"?"wrench":"brief"},
-          {label:user?.role==="helper"?"Skills & Services":"Interests",val:user?.interests?.length>0?user.interests.map((id:string)=>INTS.find(x=>x.id===id)?.label || id).join(", "):"None selected",ic:"sparkles"},
-          ...(user?.bio?[{label:"Bio",val:user.bio,ic:"info"}]:[]),
-        ].map((row,i,arr)=>(
-          <div key={row.label} style={{display:"flex",alignItems:"center",gap:14,padding:"13px 22px",borderBottom:i<arr.length-1?`1px solid ${t.border}`:"none",transition:"background .15s"}}
-            onMouseEnter={e=>e.currentTarget.style.background=t.secondary}
-            onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-            <div style={{width:34,height:34,borderRadius:10,background:t.secondary,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:`1px solid ${t.border}`}}>
-              <I n={row.ic} s={14} c={t.muted}/>
-            </div>
-            <div>
-              <div style={{fontSize:11,color:t.muted,fontWeight:700,marginBottom:2,textTransform:"uppercase",letterSpacing:"0.5px"}}>{row.label}</div>
-              <div style={{fontSize:13,color:row.val?t.text:t.muted,fontWeight:500}}>{row.val||"—"}</div>
-            </div>
-          </div>
-        ))}
-      </GCard>
     </div>
   );
 }
@@ -2144,9 +2232,33 @@ function Chat({t,currentUser}:any){
 ═══════════════════════════════════════════════════════ */
 function Profile({t,user,online,setOnline}:any){
   if(!user)return null;
+  const [editing,setEditing]=useState(false);
+  const [profileMsg,setProfileMsg]=useState("");
+  const [localProfile,setLocalProfile]=useState<any>({
+    category:user?.interests?.[0] || "",
+    location:user?.address || "",
+    idName:"",
+    idFile:null,
+    idFileName:"",
+  });
+
+  useEffect(()=>{
+    setLocalProfile((p:any)=>({
+      ...p,
+      category:user?.interests?.[0] || "",
+      location:user?.address || "",
+    }));
+  },[user?.address,user?.interests]);
+
   const initials=user.name.split(" ").map((w:string)=>w[0]).join("").toUpperCase().slice(0,2);
   const ints=user.interests.map((id:string)=>INTS.find(x=>x.id===id)).filter(Boolean);
   const memberDays=Math.floor((Date.now()-new Date(user.joinedFull||Date.now()).getTime())/(1000*60*60*24));
+
+  const saveLocalProfile = () => {
+    setEditing(false);
+    setProfileMsg("Profile fields updated locally. Firestore update is disabled for now.");
+    setTimeout(()=>setProfileMsg(""), 2200);
+  };
 
   return(
     <div className="su" style={{padding:"20px 0",maxWidth:640}}>
@@ -2157,10 +2269,11 @@ function Profile({t,user,online,setOnline}:any){
             <I n="info" s={11} c={t.muted}/>All data from your registration
           </p>
         </div>
-        <button className="press" style={{display:"flex",alignItems:"center",gap:7,padding:"8px 16px",borderRadius:12,background:t.secondary,border:`1px solid ${t.border}`,cursor:"pointer",color:t.muted,fontSize:12,fontWeight:600}}>
-          <I n="edit" s={13}/>Edit Profile
+        <button className="press" onClick={()=>setEditing(v=>!v)} style={{display:"flex",alignItems:"center",gap:7,padding:"8px 16px",borderRadius:12,background:t.secondary,border:`1px solid ${t.border}`,cursor:"pointer",color:t.muted,fontSize:12,fontWeight:600}}>
+          <I n="edit" s={13}/>{editing?"Cancel":"Edit Profile"}
         </button>
       </div>
+      {profileMsg && <p style={{fontSize:12,color:t.accent,fontWeight:700,marginBottom:10}}>{profileMsg}</p>}
 
       {/* Hero card */}
       <GCard t={t} style={{padding:"24px 24px",marginBottom:14}}>
@@ -2199,6 +2312,55 @@ function Profile({t,user,online,setOnline}:any){
               <div style={{fontSize:11,color:t.muted,marginTop:2}}>{s.label}</div>
             </div>
           ))}
+        </div>
+      </GCard>
+
+      <GCard t={t} style={{padding:"16px 18px",marginBottom:14}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <div style={{fontSize:13,fontWeight:800,color:t.text,fontFamily:"Poppins"}}>Editable Profile Fields</div>
+          {!editing ? (
+            <button className="press" onClick={()=>setEditing(true)} style={{padding:"6px 10px",borderRadius:10,background:t.secondary,border:`1px solid ${t.border}`,color:t.text,fontSize:11,fontWeight:700,cursor:"pointer"}}>Edit</button>
+          ) : (
+            <button className="press" onClick={saveLocalProfile} style={{padding:"6px 10px",borderRadius:10,background:`linear-gradient(135deg,${t.primary},${t.accent})`,border:"none",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer"}}>Save</button>
+          )}
+        </div>
+        <div style={{display:"grid",gap:10}}>
+          <GlassInp
+            t={t}
+            label="Category"
+            value={localProfile.category}
+            onChange={(e:any)=>setLocalProfile((p:any)=>({...p,category:e.target.value}))}
+            placeholder="e.g. Cleaning"
+          />
+          <GlassInp
+            t={t}
+            label="Location"
+            value={localProfile.location}
+            onChange={(e:any)=>setLocalProfile((p:any)=>({...p,location:e.target.value}))}
+            placeholder="Your area"
+          />
+          <GlassInp
+            t={t}
+            label="ID Verification Name"
+            value={localProfile.idName}
+            onChange={(e:any)=>setLocalProfile((p:any)=>({...p,idName:e.target.value}))}
+            placeholder="Aadhaar / Passport / Driver License"
+          />
+          <div>
+            <label style={{display:"block",fontSize:11,fontWeight:700,color:t.sub,marginBottom:7,textTransform:"uppercase",letterSpacing:"0.5px"}}>ID File (Image/PDF)</label>
+            <input
+              type="file"
+              accept="image/*,.pdf"
+              disabled={!editing}
+              onChange={(e:any)=>{
+                const file = e.target.files?.[0] || null;
+                setLocalProfile((p:any)=>({...p,idFile:file,idFileName:file?.name || ""}));
+              }}
+              style={{width:"100%",padding:"10px",borderRadius:12,background:t.input,border:`1.5px solid ${t.border}`,color:t.text,fontSize:13}}
+            />
+            {localProfile.idFileName && <p style={{fontSize:11,color:t.muted,marginTop:6}}>Selected: {localProfile.idFileName}</p>}
+            <p style={{fontSize:10,color:t.muted,marginTop:5}}>This upload is local-only for now and is not sent to Firestore.</p>
+          </div>
         </div>
       </GCard>
 
@@ -2277,7 +2439,20 @@ function Profile({t,user,online,setOnline}:any){
   );
 }
 
-function NotificationsPage({t,currentUser,notifications,onMarkRead}:any){
+function NotificationsPage({t,currentUser,notifications,onMarkRead,setPage,setDashboardTab}:any){
+  const jumpFromNotification = (item:any) => {
+    const type = item?.type;
+    if (["bid_received", "bid_countered"].includes(type)) {
+      setDashboardTab?.("bids");
+      setPage?.("dashboard");
+      return;
+    }
+    if (["bid_accepted", "task_accepted", "payment_confirmed", "task_payment_received", "completion_requested", "task_completed"].includes(type)) {
+      setDashboardTab?.("orders");
+      setPage?.("dashboard");
+    }
+  };
+
   return(
     <div className="su" style={{padding:"20px 0",maxWidth:860}}>
       <div style={{marginBottom:18}}>
@@ -2285,12 +2460,26 @@ function NotificationsPage({t,currentUser,notifications,onMarkRead}:any){
         <p style={{color:t.sub,marginTop:5,fontSize:14}}>Latest workflow and moderation events for your account.</p>
       </div>
       <GCard t={t} style={{padding:"14px"}}>
-        <NotificationsPanel
-          notifications={(notifications || []).map((n:any)=>(
-            { id:n.id, title:n.title, body:n.body, read:Boolean(n.read) }
+        {(notifications || []).length===0 && <div style={{color:t.muted,fontSize:13}}>No notifications yet.</div>}
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {(notifications || []).map((n:any)=>(
+            <div key={n.id} onClick={()=>jumpFromNotification(n)}
+              style={{border:`1px solid ${n.read?t.border:t.primary+"44"}`,borderRadius:12,padding:12,background:n.read?t.glass:t.secondary,cursor:"pointer"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+                <div>
+                  <div style={{fontWeight:700,fontSize:14,color:t.text}}>{n.title}</div>
+                  <p style={{marginTop:6,fontSize:12,color:t.sub}}>{n.body}</p>
+                </div>
+                {!n.read && (
+                  <button className="press" onClick={(e:any)=>{e.stopPropagation();onMarkRead(n.id);}}
+                    style={{border:"none",borderRadius:8,background:t.primary,color:"#fff",cursor:"pointer",fontSize:11,padding:"4px 8px"}}>
+                    Mark read
+                  </button>
+                )}
+              </div>
+            </div>
           ))}
-          onMarkRead={onMarkRead}
-        />
+        </div>
       </GCard>
       {!currentUser?.uid && <p style={{fontSize:12,color:t.muted,marginTop:12}}>Sign in to view your notifications.</p>}
     </div>
@@ -2305,6 +2494,7 @@ export default function App(){
   const { user: authUser, profile, loading: authLoading, signOut } = useAuth();
   const [dark,setDark]=useState(false);
   const [page,setPage]=useState(authUser ? "dashboard" : "login");
+  const [dashboardFocusTab,setDashboardFocusTab]=useState<string | null>(null);
   const [online,setOnline]=useState(true);
   const [postedTasks,setPostedTasks]=useState<any[]>([]);
   const [notifications,setNotifications]=useState<any[]>([]);
@@ -2432,11 +2622,11 @@ export default function App(){
         )}
         <div style={{padding:loggedIn?"0 24px":0}}>
           {page==="login"    &&<LoginPage onLogin={login} t={t} isDark={dark} toggleTheme={()=>setDark(v=>!v)}/>}
-          {page==="dashboard"&&<Dashboard t={t} user={userForUI} setPage={setPage} postedTasks={postedTasks} currentUid={authUser?.uid}/>}
+          {page==="dashboard"&&<Dashboard t={t} user={userForUI} setPage={setPage} postedTasks={postedTasks} currentUid={authUser?.uid} focusTab={dashboardFocusTab} onFocusTabHandled={()=>setDashboardFocusTab(null)}/>}
           {page==="post-task"&&<PostTask t={t} setPage={setPage} currentUser={{uid: authUser?.uid, ...userForUI}}/>}
           {page==="requests"  &&<Bidding t={t} currentUser={{uid: authUser?.uid, ...userForUI}} setPage={setPage}/>}
           {page==="chat"     &&<Chat t={t} currentUser={{uid: authUser?.uid, ...userForUI}}/>}
-          {page==="notifications"&&<NotificationsPage t={t} currentUser={{uid: authUser?.uid, ...userForUI}} notifications={notifications} onMarkRead={markRead}/>}
+          {page==="notifications"&&<NotificationsPage t={t} currentUser={{uid: authUser?.uid, ...userForUI}} notifications={notifications} onMarkRead={markRead} setPage={setPage} setDashboardTab={setDashboardFocusTab}/>}
           {page==="profile"  &&<Profile t={t} user={userForUI} online={online} setOnline={setOnline}/>}
         </div>
       </main>

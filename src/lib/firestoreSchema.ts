@@ -83,10 +83,13 @@ export type TaskDoc = {
   acceptedBy: string | null;
   acceptedBidId: string | null;
   status: TaskStatus;
+  paymentStatus?: "pending" | "paid";
+  paymentMethod?: "upi_qr" | "card" | "netbanking" | string;
   recommendedHelpers: string[];
   createdAt: Timestamp;
   updatedAt: Timestamp;
   completedAt?: Timestamp;
+  paymentCompletedAt?: Timestamp;
 };
 
 export type BidDoc = {
@@ -113,7 +116,10 @@ export type RatingDoc = {
 export type NotificationType =
   | "bid_received"
   | "bid_accepted"
+  | "bid_countered"
   | "task_accepted"
+  | "payment_confirmed"
+  | "task_payment_received"
   | "completion_requested"
   | "task_completed"
   | "rating_received"

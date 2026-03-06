@@ -26,6 +26,8 @@ service cloud.firestore {
         request.resource.data.schedule.date is string &&
         request.resource.data.schedule.time is string &&
         (request.resource.data.paymentOptional == null || request.resource.data.paymentOptional is number) &&
+        request.resource.data.paymentStatus == 'pending' &&
+        request.resource.data.paymentMethod == null &&
         request.resource.data.status == 'open' &&
         request.resource.data.acceptedBy == null &&
         request.resource.data.acceptedBidId == null;
@@ -61,6 +63,16 @@ service cloud.firestore {
         request.resource.data.status == 'cancelled';
     }
 
+    function posterConfirmingPayment() {
+      return isTaskPoster(resource.data) &&
+        resource.data.acceptedBy is string &&
+        resource.data.paymentStatus in ['pending', null] &&
+        resource.data.status in ['accepted', 'in_progress'] &&
+        request.resource.data.paymentStatus == 'paid' &&
+        request.resource.data.paymentMethod in ['upi_qr', 'card', 'netbanking'] &&
+        request.resource.data.status == 'in_progress';
+    }
+
     function isParticipant(conversationId) {
       return signedIn() &&
         request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
@@ -79,7 +91,7 @@ service cloud.firestore {
       allow read: if signedIn();
       allow create: if signedIn() && validTaskCreate();
       allow update: if signedIn() &&
-        (posterAcceptingBid() || helperRequestingCompletion() || posterConfirmingCompletion() || posterCancellingTask() || isAdmin());
+        (posterAcceptingBid() || helperRequestingCompletion() || posterConfirmingCompletion() || posterCancellingTask() || posterConfirmingPayment() || isAdmin());
       allow delete: if isAdmin();
     }
 
@@ -132,14 +144,22 @@ service cloud.firestore {
         request.resource.data.stars is int &&
         request.resource.data.stars >= 1 && request.resource.data.stars <= 5 &&
         get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.status == 'completed' &&
-        get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.posterId == request.auth.uid &&
-        get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.acceptedBy == request.resource.data.toUserId;
+        (
+          (
+            get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.posterId == request.auth.uid &&
+            get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.acceptedBy == request.resource.data.toUserId
+          ) ||
+          (
+            get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.acceptedBy == request.auth.uid &&
+            get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.posterId == request.resource.data.toUserId
+          )
+        );
       allow update, delete: if false;
     }
 
     match /notifications/{notificationId} {
       allow read: if signedIn() && resource.data.userId == request.auth.uid;
-      allow create: if signedIn() && (request.resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if signedIn();
       allow update: if signedIn() && resource.data.userId == request.auth.uid;
       allow delete: if false;
     }

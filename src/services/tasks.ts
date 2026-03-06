@@ -53,6 +53,8 @@ export async function createTask(input: CreateTaskInput): Promise<string> {
     acceptedBy: null,
     acceptedBidId: null,
     status: "open",
+    paymentStatus: "pending",
+    paymentMethod: null,
     recommendedHelpers: [],
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -237,4 +239,43 @@ export async function cancelTask(args: {
     body: `Your task was marked cancelled: ${args.taskTitle}`,
     ref: { taskId: args.taskId },
   });
+}
+
+export async function markTaskPaid(args: {
+  taskId: string;
+  posterId: string;
+  helperId: string;
+  currentStatus: TaskStatus;
+  taskTitle: string;
+  method: "upi_qr" | "card" | "netbanking";
+}): Promise<void> {
+  assertFirestore();
+
+  if (!["accepted", "in_progress"].includes(args.currentStatus)) {
+    throw new Error("Task is not ready for payment");
+  }
+
+  await updateDoc(doc(firestore!, "tasks", args.taskId), {
+    paymentStatus: "paid",
+    paymentMethod: args.method,
+    paymentCompletedAt: serverTimestamp(),
+    // Payment unlocks helper controls automatically.
+    status: "in_progress",
+    updatedAt: serverTimestamp(),
+  });
+
+  await Promise.all([
+    notify(args.helperId, {
+      type: "task_payment_received",
+      title: "Payment received",
+      body: `Payment for ${args.taskTitle} is successful. Work can start now.`,
+      ref: { taskId: args.taskId },
+    }),
+    notify(args.posterId, {
+      type: "payment_confirmed",
+      title: "Payment successful",
+      body: `Payment completed for ${args.taskTitle}`,
+      ref: { taskId: args.taskId },
+    }),
+  ]);
 }

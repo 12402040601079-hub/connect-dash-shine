@@ -1,6 +1,7 @@
 import {
   collection,
   doc,
+  getDoc,
   getDocs,
   onSnapshot,
   orderBy,
@@ -13,6 +14,7 @@ import {
 
 import { firestore } from "@/integrations/firebase/client";
 import type { BidDoc } from "@/lib/firestoreSchema";
+import { notify } from "@/services/notifications";
 
 export type PlaceBidInput = {
   taskId: string;
@@ -44,6 +46,13 @@ export async function placeBid(input: PlaceBidInput): Promise<string> {
     },
     { merge: true },
   );
+
+  await notify(input.posterId, {
+    type: "bid_received",
+    title: "New bid received",
+    body: `${input.helperName} bid INR ${input.amount} on your task`,
+    ref: { taskId: input.taskId, bidId },
+  });
 
   return bidId;
 }
@@ -131,4 +140,16 @@ export async function counterBid(
     status: "pending",
     updatedAt: serverTimestamp(),
   });
+
+  const bidRef = doc(firestore, "bids", bidId);
+  const snap = await getDoc(bidRef);
+  const row = snap.data() as BidDoc | undefined;
+  if (row?.helperId) {
+    await notify(row.helperId, {
+      type: "bid_countered",
+      title: "Counter offer received",
+      body: `User sent a counter offer of INR ${amount}`,
+      ref: { taskId: row.taskId, bidId },
+    });
+  }
 }
