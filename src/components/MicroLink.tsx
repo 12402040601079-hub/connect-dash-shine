@@ -7,14 +7,14 @@ import { lovable } from "@/integrations/lovable/index";
    GLOBAL CSS — GLASSMORPHISM PREMIUM
 ═══════════════════════════════════════════════════════ */
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html,body,#root{height:100%;font-family:'DM Sans',sans-serif;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+html,body,#root{height:100%;font-family:'Poppins',sans-serif;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:rgba(139,92,246,.3);border-radius:4px}
 input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
-input,select,button{font-family:'DM Sans',sans-serif}
+input,select,button{font-family:'Poppins',sans-serif}
 
 /* Glassmorphism base */
 .glass{
@@ -403,7 +403,7 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
         <I n="check" s={40} c="#fff" sw={2.5}/>
       </div>
       <div style={{textAlign:"center"}}>
-        <h2 className="su1" style={{fontFamily:"Syne",fontSize:34,fontWeight:800,color:t.text,marginBottom:10}}>Welcome, {form.name.split(" ")[0]}!</h2>
+        <h2 className="su1" style={{fontFamily:"Poppins",fontSize:34,fontWeight:800,color:t.text,marginBottom:10}}>Welcome, {form.name.split(" ")[0]}!</h2>
         <p className="su2" style={{color:t.sub,fontSize:16}}>Preparing your {role==="helper"?"helper":"user"} dashboard…</p>
       </div>
       <div className="su3" style={{display:"flex",gap:8}}>
@@ -420,7 +420,7 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
           <div style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:56,height:56,borderRadius:18,background:`linear-gradient(135deg,${t.primary},${t.accent})`,marginBottom:20,boxShadow:`0 0 40px ${t.glow}`}}>
             <I n="zap" s={24} c="#fff" sw={2}/>
           </div>
-          <h2 style={{fontFamily:"Syne",fontSize:28,fontWeight:800,color:t.text}}>Welcome back</h2>
+          <h2 style={{fontFamily:"Poppins",fontSize:28,fontWeight:800,color:t.text}}>Welcome back</h2>
           <p style={{color:t.sub,fontSize:14,marginTop:6}}>Sign in to your MicroLink account</p>
         </div>
         <GCard t={t} style={{padding:"26px 24px"}}>
@@ -431,7 +431,7 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
             />
             {authError&&<p style={{fontSize:12,color:t.danger,fontWeight:600,textAlign:"center"}}>⚠ {authError}</p>}
             <button className="press" onClick={signInSubmit} disabled={authLoading}
-              style={{width:"100%",padding:"14px 0",borderRadius:14,background:`linear-gradient(135deg,${t.primary},${t.accent})`,color:"#fff",border:"none",cursor:"pointer",fontFamily:"Syne",fontWeight:800,fontSize:15,opacity:authLoading?.6:1}}>
+              style={{width:"100%",padding:"14px 0",borderRadius:14,background:`linear-gradient(135deg,${t.primary},${t.accent})`,color:"#fff",border:"none",cursor:"pointer",fontFamily:"Poppins",fontWeight:800,fontSize:15,opacity:authLoading?.6:1}}>
               {authLoading?"Signing in…":"Sign In"}
             </button>
             <div style={{display:"flex",gap:10,marginTop:4}}>
@@ -463,7 +463,7 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
             <I n="arL" s={16}/>
           </button>
           <div style={{flex:1}}>
-            <h2 style={{fontFamily:"Syne",fontSize:22,fontWeight:800,color:t.text}}>{role==="helper"?"Helper Registration":"User Registration"}</h2>
+            <h2 style={{fontFamily:"Poppins",fontSize:22,fontWeight:800,color:t.text}}>{role==="helper"?"Helper Registration":"User Registration"}</h2>
             <p style={{fontSize:12,color:t.muted,marginTop:3}}>All fields become your real profile data</p>
           </div>
           <span style={{padding:"4px 14px",borderRadius:99,fontSize:11,fontWeight:700,background:role==="helper"?`${t.accent}20`:`${t.primary}20`,color:role==="helper"?t.accent:t.primary,border:`1px solid ${role==="helper"?t.accent+"40":t.primary+"40"}`}}>
@@ -502,7 +502,7 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
             <div style={{gridColumn:"1/-1"}}>
               <label style={{display:"block",fontSize:11,fontWeight:700,color:t.sub,marginBottom:7,letterSpacing:"0.5px",textTransform:"uppercase"}}>Short Bio (optional)</label>
               <textarea value={form.bio} onChange={e=>upd("bio",e.target.value)} placeholder={role==="helper"?"Describe your experience and skills…":"What kind of help are you looking for?"}
-                style={{width:"100%",padding:"12px 16px",borderRadius:12,background:t.mode==="dark"?"rgba(139,92,246,0.06)":"rgba(255,255,255,0.75)",border:`1.5px solid ${t.border}`,color:t.text,fontSize:14,outline:"none",resize:"vertical",minHeight:72,backdropFilter:"blur(8px)",fontFamily:"DM Sans"}}/>
+                style={{width:"100%",padding:"12px 16px",borderRadius:12,background:t.mode==="dark"?"rgba(139,92,246,0.06)":"rgba(255,255,255,0.75)",border:`1.5px solid ${t.border}`,color:t.text,fontSize:14,outline:"none",resize:"vertical",minHeight:72,backdropFilter:"blur(8px)",fontFamily:"Poppins"}}/>
             </div>
             <div style={{gridColumn:"1/-1"}}>
               <GlassInp label="Password *" ic="shield" type={showPw?"text":"password"} value={form.password} onChange={e=>upd("password",e.target.value)} placeholder="Create a strong password" t={t} err={err.password}
@@ -550,7 +550,7 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
 
           {authError&&<p style={{fontSize:12,color:t.danger,fontWeight:600,textAlign:"center",marginTop:12}}>⚠ {authError}</p>}
           <button className="press" onClick={submit} disabled={authLoading}
-            style={{marginTop:24,width:"100%",padding:"14px 0",borderRadius:14,background:`linear-gradient(135deg,${t.primary},${t.accent})`,color:"#fff",border:"none",cursor:"pointer",fontFamily:"Syne",fontWeight:800,fontSize:15,display:"flex",alignItems:"center",justifyContent:"center",gap:10,boxShadow:`0 8px 28px ${t.primary}50`,letterSpacing:"0.3px",opacity:authLoading?.6:1}}>
+            style={{marginTop:24,width:"100%",padding:"14px 0",borderRadius:14,background:`linear-gradient(135deg,${t.primary},${t.accent})`,color:"#fff",border:"none",cursor:"pointer",fontFamily:"Poppins",fontWeight:800,fontSize:15,display:"flex",alignItems:"center",justifyContent:"center",gap:10,boxShadow:`0 8px 28px ${t.primary}50`,letterSpacing:"0.3px",opacity:authLoading?.6:1}}>
             {authLoading?"Creating account…":<>Create My Account <I n="arR" s={17} c="#fff" sw={2.5}/></>}
           </button>
           <p style={{fontSize:11,color:t.muted,textAlign:"center",marginTop:12}}>By registering you agree to our Terms & Privacy Policy</p>
@@ -568,21 +568,38 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
       </button>
 
       <div style={{textAlign:"center",maxWidth:700}}>
-        {/* Logo mark */}
-        <div style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:68,height:68,borderRadius:22,background:`linear-gradient(135deg,${t.primary},${t.accent})`,marginBottom:28,boxShadow:`0 0 50px ${t.glow}`,animation:"breathe 4s ease-in-out infinite"}}>
-          <I n="zap" s={30} c="#fff" sw={2}/>
+        <div style={{display:"flex",flexDirection:"column",alignItems:"center"}}>
+          {/* Logo mark */}
+          <div style={{display:"inline-flex",alignItems:"center",gap:12,marginBottom:14}}>
+            <div style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:68,height:68,borderRadius:22,background:`linear-gradient(135deg,${t.primary},${t.accent})`,boxShadow:`0 0 50px ${t.glow}`,animation:"breathe 4s ease-in-out infinite"}}>
+              <I n="zap" s={30} c="#fff" sw={2}/>
+            </div>
+            <span style={{fontSize:30,fontWeight:800,color:t.text,letterSpacing:"-0.6px"}}>Microlink</span>
+          </div>
+
+          <div style={{display:"inline-flex",alignItems:"center",gap:7,padding:"6px 20px",borderRadius:99,background:t.secondary,border:`1px solid ${t.border}`,color:t.primary,fontSize:13,fontWeight:700,marginBottom:26,backdropFilter:"blur(8px)"}}>
+            <I n="sparkles" s={13} c={t.primary}/>Join the Microlink community
+          </div>
         </div>
 
-        <div style={{display:"inline-flex",alignItems:"center",gap:7,padding:"6px 20px",borderRadius:99,background:t.secondary,border:`1px solid ${t.border}`,color:t.primary,fontSize:13,fontWeight:700,marginBottom:26,backdropFilter:"blur(8px)"}}>
-          <I n="sparkles" s={13} c={t.primary}/>Join the MicroLink community
-        </div>
-
-        <h1 style={{fontFamily:"Syne",fontSize:"clamp(38px,6vw,66px)",fontWeight:800,lineHeight:1.05,letterSpacing:"-2px",marginBottom:20}}>
-          <span style={{background:`linear-gradient(120deg,${t.primary},${t.accent})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>Earn</span>
+        <h1 style={{fontFamily:"Poppins",fontSize:"clamp(38px,6vw,66px)",fontWeight:800,lineHeight:1.05,letterSpacing:"-2px",marginBottom:20}}>
+          <span style={t.mode==="dark"
+            ? {color:"#a78bfa"}
+            : {color:"#5b21b6",background:`linear-gradient(120deg,${t.primary},${t.accent})`,backgroundClip:"text",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",textShadow:"0 1px 1px rgba(255,255,255,0.6)"}}>
+            Earn
+          </span>
           <span style={{color:t.muted,margin:"0 .15em"}}>·</span>
-          <span style={{background:`linear-gradient(120deg,${t.accent},#06b6d4)`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>Help</span>
+          <span style={t.mode==="dark"
+            ? {color:"#2dd4bf"}
+            : {color:"#047857",background:`linear-gradient(120deg,${t.accent},#06b6d4)`,backgroundClip:"text",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",textShadow:"0 1px 1px rgba(255,255,255,0.6)"}}>
+            Help
+          </span>
           <span style={{color:t.muted,margin:"0 .15em"}}>·</span>
-          <span style={{background:`linear-gradient(120deg,#a78bfa,${t.primary})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>Grow</span>
+          <span style={t.mode==="dark"
+            ? {color:"#c4b5fd"}
+            : {color:"#6d28d9",background:`linear-gradient(120deg,#a78bfa,${t.primary})`,backgroundClip:"text",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",textShadow:"0 1px 1px rgba(255,255,255,0.6)"}}>
+            Grow
+          </span>
           <br/>
           <span style={{color:t.text,fontSize:".8em",fontWeight:700}}>Together</span>
         </h1>
@@ -644,7 +661,7 @@ function RoleCard({title,desc,ic,col,grad,feats,t,onClick}:any){
         <I n={ic} s={24} c={h?"#fff":col}/>
       </div>
       <div>
-        <div style={{fontFamily:"Syne",fontSize:18,fontWeight:800,color:t.text,marginBottom:6}}>{title}</div>
+        <div style={{fontFamily:"Poppins",fontSize:18,fontWeight:800,color:t.text,marginBottom:6}}>{title}</div>
         <div style={{fontSize:13,color:t.sub,lineHeight:1.6,maxWidth:200}}>{desc}</div>
       </div>
       <ul style={{display:"flex",flexDirection:"column",gap:8,listStyle:"none"}}>
@@ -683,7 +700,7 @@ function Sidebar({page,setPage,t,isDark,toggleTheme,online,setOnline,user}:any){
         <div style={{width:36,height:36,borderRadius:12,background:`linear-gradient(135deg,${t.primary},${t.accent})`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 0 20px ${t.glow}`}}>
           <I n="zap" s={18} c="#fff" sw={2}/>
         </div>
-        <span style={{fontFamily:"Syne",fontWeight:800,fontSize:18,color:t.text,letterSpacing:"-.5px"}}>MicroLink</span>
+        <span style={{fontFamily:"Poppins",fontWeight:800,fontSize:18,color:t.text,letterSpacing:"-.5px"}}>MicroLink</span>
       </div>
 
       {/* Nav */}
@@ -745,7 +762,7 @@ function MobileNav({page,setPage,t}:any){
             style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",color:a?t.primary:t.muted,padding:"4px 0",position:"relative"}}>
             {a&&<div style={{position:"absolute",top:-6,width:32,height:2,background:`linear-gradient(90deg,${t.primary},${t.accent})`,borderRadius:99}}/>}
             <I n={item.ic} s={20}/>
-            <span style={{fontSize:9,fontWeight:a?800:400,fontFamily:"Syne"}}>{item.label}</span>
+            <span style={{fontSize:9,fontWeight:a?800:400,fontFamily:"Poppins"}}>{item.label}</span>
           </button>
         );
       })}
@@ -804,7 +821,7 @@ function TopBar({t,user,online,setOnline,setPage}:any){
         <span style={{fontSize:12,fontWeight:700,color:online?t.accent:t.muted}}>{online?"Online":"Busy"}</span>
       </div>
       <button onClick={()=>setPage("profile")}
-        style={{width:38,height:38,borderRadius:"50%",background:`linear-gradient(135deg,${t.primary},${t.accent})`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800,color:"#fff",fontFamily:"Syne",boxShadow:`0 0 16px ${t.glow}`}}>
+        style={{width:38,height:38,borderRadius:"50%",background:`linear-gradient(135deg,${t.primary},${t.accent})`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800,color:"#fff",fontFamily:"Poppins",boxShadow:`0 0 16px ${t.glow}`}}>
         {initials}
       </button>
     </div>
@@ -814,7 +831,7 @@ function TopBar({t,user,online,setOnline,setPage}:any){
 /* ═══════════════════════════════════════════════════════
    DASHBOARD
 ═══════════════════════════════════════════════════════ */
-function Dashboard({t,user}:any){
+function Dashboard({t,user,setPage}:any){
   const [taskCount,setTaskCount]=useState(0);
   const [earned,setEarned]=useState(0);
   const greeting=()=>{const h=new Date().getHours();return h<12?"Good morning":h<17?"Good afternoon":"Good evening";};
@@ -833,7 +850,7 @@ function Dashboard({t,user}:any){
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
           <div>
             <p style={{fontSize:13,color:t.muted,fontWeight:600,marginBottom:6}}>{greeting()}, {new Date().toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long"})}</p>
-            <h2 style={{fontFamily:"Syne",fontSize:28,fontWeight:800,color:t.text,letterSpacing:"-0.5px"}}>
+            <h2 style={{fontFamily:"Poppins",fontSize:28,fontWeight:800,color:t.text,letterSpacing:"-0.5px"}}>
               Welcome back, {user?.name?.split(" ")[0]} 👋
             </h2>
             <div style={{display:"flex",alignItems:"center",gap:8,marginTop:8}}>
@@ -856,7 +873,7 @@ function Dashboard({t,user}:any){
               </div>
               <span style={{fontSize:10,fontWeight:800,color:s.col,background:`${s.col}15`,padding:"3px 9px",borderRadius:99,border:`1px solid ${s.col}30`}}>{s.badge}</span>
             </div>
-            <div style={{fontFamily:"Syne",fontSize:28,fontWeight:800,color:t.text,marginBottom:3}}>{s.val}</div>
+            <div style={{fontFamily:"Poppins",fontSize:28,fontWeight:800,color:t.text,marginBottom:3}}>{s.val}</div>
             <div style={{fontSize:12,color:t.muted,fontWeight:500}}>{s.label}</div>
           </GCard>
         ))}
@@ -864,18 +881,19 @@ function Dashboard({t,user}:any){
 
       {/* Quick actions */}
       <div style={{marginBottom:24}}>
-        <h3 style={{fontFamily:"Syne",fontSize:15,fontWeight:700,color:t.text,marginBottom:13}}>Quick Actions</h3>
+        <h3 style={{fontFamily:"Poppins",fontSize:15,fontWeight:700,color:t.text,marginBottom:13}}>Quick Actions</h3>
         <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
           {(user?.role==="helper"?[
-            {label:"Browse Tasks",ic:"compass",col:t.primary},
-            {label:"View My Bids",ic:"tag",col:t.accent},
-            {label:"Check Messages",ic:"msg",col:"#3b82f6"},
+            {label:"Browse Tasks",ic:"compass",col:t.primary,target:"discover"},
+            {label:"View My Bids",ic:"tag",col:t.accent,target:"bidding"},
+            {label:"Check Messages",ic:"msg",col:"#3b82f6",target:"chat"},
           ]:[
-            {label:"Post a Task",ic:"plus",col:t.primary},
-            {label:"Find Helpers",ic:"compass",col:t.accent},
-            {label:"Messages",ic:"msg",col:"#3b82f6"},
+            {label:"Post Task",ic:"plus",col:t.primary,target:"post-task"},
+            {label:"Find Helpers",ic:"compass",col:t.accent,target:"discover"},
+            {label:"Messages",ic:"msg",col:"#3b82f6",target:"chat"},
           ]).map(a=>(
             <button key={a.label} className="press hover-lift"
+              onClick={()=>setPage(a.target)}
               style={{display:"flex",alignItems:"center",gap:8,padding:"10px 18px",borderRadius:12,background:`${a.col}12`,color:a.col,border:`1.5px solid ${a.col}30`,cursor:"pointer",fontSize:13,fontWeight:700,backdropFilter:"blur(8px)"}}>
               <I n={a.ic} s={14} c={a.col}/>{a.label}
             </button>
@@ -884,7 +902,7 @@ function Dashboard({t,user}:any){
       </div>
 
       {/* Profile info */}
-      <h3 style={{fontFamily:"Syne",fontSize:15,fontWeight:700,color:t.text,marginBottom:13}}>Your Profile Information</h3>
+      <h3 style={{fontFamily:"Poppins",fontSize:15,fontWeight:700,color:t.text,marginBottom:13}}>Your Profile Information</h3>
       <GCard t={t} style={{overflow:"hidden"}}>
         {[
           {label:"Full Name",val:user?.name,ic:"user"},
@@ -909,6 +927,109 @@ function Dashboard({t,user}:any){
             </div>
           </div>
         ))}
+      </GCard>
+    </div>
+  );
+}
+
+function PostTask({t,setPage}:any){
+  const [title,setTitle]=useState("");
+  const [category,setCategory]=useState("General");
+  const [budget,setBudget]=useState("");
+  const [location,setLocation]=useState("");
+  const [description,setDescription]=useState("");
+  const [urgent,setUrgent]=useState(false);
+  const [posted,setPosted]=useState(false);
+
+  const submit=(e:any)=>{
+    e.preventDefault();
+    if(!title.trim()||!budget.trim()||!location.trim()||!description.trim()) return;
+    setPosted(true);
+  };
+
+  return(
+    <div className="su" style={{padding:"20px 0",maxWidth:760}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,marginBottom:20,flexWrap:"wrap"}}>
+        <div>
+          <h2 style={{fontFamily:"Poppins",fontSize:28,fontWeight:800,color:t.text,letterSpacing:"-0.5px"}}>Post a Task</h2>
+          <p style={{color:t.sub,marginTop:5,fontSize:14}}>Create a task so nearby helpers can discover and bid.</p>
+        </div>
+        <button className="press" onClick={()=>setPage("dashboard")}
+          style={{padding:"9px 14px",borderRadius:12,background:t.secondary,border:`1px solid ${t.border}`,color:t.text,cursor:"pointer",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:6}}>
+          <I n="arL" s={13}/>Back to Dashboard
+        </button>
+      </div>
+
+      <GCard t={t} style={{padding:"20px 20px"}}>
+        {posted?(
+          <div style={{display:"flex",flexDirection:"column",gap:14}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderRadius:12,background:`${t.accent}15`,border:`1px solid ${t.accent}35`}}>
+              <I n="checkC" s={18} c={t.accent}/>
+              <div>
+                <div style={{fontSize:14,fontWeight:700,color:t.text}}>Task posted successfully</div>
+                <div style={{fontSize:12,color:t.muted}}>Helpers can now find your task in Discover.</div>
+              </div>
+            </div>
+            <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+              <button className="press" onClick={()=>setPage("discover")}
+                style={{padding:"10px 14px",borderRadius:12,background:`linear-gradient(135deg,${t.primary},${t.accent})`,color:"#fff",border:"none",cursor:"pointer",fontSize:13,fontWeight:700}}>
+                Go to Discover
+              </button>
+              <button className="press" onClick={()=>setPage("dashboard")}
+                style={{padding:"10px 14px",borderRadius:12,background:t.secondary,color:t.text,border:`1px solid ${t.border}`,cursor:"pointer",fontSize:13,fontWeight:700}}>
+                Go to Dashboard
+              </button>
+            </div>
+          </div>
+        ):(
+          <form onSubmit={submit} style={{display:"grid",gap:14}}>
+            <div style={{display:"grid",gap:8}}>
+              <label style={{fontSize:12,fontWeight:700,color:t.sub}}>Task Title</label>
+              <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="e.g. Need help assembling a study table"
+                style={{width:"100%",padding:"12px 14px",borderRadius:12,background:t.input,border:`1.5px solid ${t.border}`,color:t.text,fontSize:14,outline:"none"}}/>
+            </div>
+
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              <div style={{display:"grid",gap:8}}>
+                <label style={{fontSize:12,fontWeight:700,color:t.sub}}>Category</label>
+                <select value={category} onChange={e=>setCategory(e.target.value)}
+                  style={{width:"100%",padding:"12px 14px",borderRadius:12,background:t.input,border:`1.5px solid ${t.border}`,color:t.text,fontSize:14,outline:"none"}}>
+                  {["General","Repair","Tutoring","Delivery","Tech","Pet Care","Cleaning"].map(c=>(
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{display:"grid",gap:8}}>
+                <label style={{fontSize:12,fontWeight:700,color:t.sub}}>Budget (INR)</label>
+                <input type="number" min="1" value={budget} onChange={e=>setBudget(e.target.value)} placeholder="e.g. 700"
+                  style={{width:"100%",padding:"12px 14px",borderRadius:12,background:t.input,border:`1.5px solid ${t.border}`,color:t.text,fontSize:14,outline:"none"}}/>
+              </div>
+            </div>
+
+            <div style={{display:"grid",gap:8}}>
+              <label style={{fontSize:12,fontWeight:700,color:t.sub}}>Location</label>
+              <input value={location} onChange={e=>setLocation(e.target.value)} placeholder="Area, city"
+                style={{width:"100%",padding:"12px 14px",borderRadius:12,background:t.input,border:`1.5px solid ${t.border}`,color:t.text,fontSize:14,outline:"none"}}/>
+            </div>
+
+            <div style={{display:"grid",gap:8}}>
+              <label style={{fontSize:12,fontWeight:700,color:t.sub}}>Task Description</label>
+              <textarea value={description} onChange={e=>setDescription(e.target.value)} rows={4}
+                placeholder="Describe what you need, preferred time, and any details helpers should know."
+                style={{width:"100%",padding:"12px 14px",borderRadius:12,background:t.input,border:`1.5px solid ${t.border}`,color:t.text,fontSize:14,outline:"none",resize:"vertical",fontFamily:"Poppins"}}/>
+            </div>
+
+            <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",width:"fit-content"}}>
+              <input type="checkbox" checked={urgent} onChange={e=>setUrgent(e.target.checked)}/>
+              <span style={{fontSize:13,color:t.text,fontWeight:600}}>Mark this task as urgent</span>
+            </label>
+
+            <button className="press" type="submit"
+              style={{marginTop:6,padding:"12px 16px",borderRadius:12,background:`linear-gradient(135deg,${t.primary},${t.accent})`,color:"#fff",border:"none",cursor:"pointer",fontSize:14,fontWeight:800}}>
+              Publish Task
+            </button>
+          </form>
+        )}
       </GCard>
     </div>
   );
@@ -950,7 +1071,7 @@ function Discover({t}:any){
   return(
     <div className="su" style={{padding:"20px 0",maxWidth:950}}>
       <div style={{marginBottom:20}}>
-        <h2 style={{fontFamily:"Syne",fontSize:28,fontWeight:800,color:t.text,letterSpacing:"-0.5px"}}>Task Discovery</h2>
+        <h2 style={{fontFamily:"Poppins",fontSize:28,fontWeight:800,color:t.text,letterSpacing:"-0.5px"}}>Task Discovery</h2>
         <p style={{color:t.sub,marginTop:5,fontSize:14}}>{tasks.length} tasks available near you</p>
       </div>
 
@@ -1030,12 +1151,12 @@ function Discover({t}:any){
                   {sel===task.id&&<p style={{fontSize:12,color:t.sub,marginTop:8,lineHeight:1.5,animation:"fadeIn .2s ease both"}}>{task.desc}</p>}
                 </div>
                 <div style={{textAlign:"right",flexShrink:0}}>
-                  <div style={{fontFamily:"Syne",fontSize:16,fontWeight:800,color:t.text}}>₹{task.budget}</div>
+                  <div style={{fontFamily:"Poppins",fontSize:16,fontWeight:800,color:t.text}}>₹{task.budget}</div>
                   <div style={{fontSize:11,color:t.muted}}>{task.posted}</div>
                 </div>
               </div>
               {sel===task.id&&(
-                <button className="press" style={{marginTop:10,width:"100%",padding:"8px 0",borderRadius:10,background:`linear-gradient(135deg,${t.primary},${t.accent})`,color:"#fff",border:"none",cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:"Syne",boxShadow:`0 4px 14px ${t.primary}40`,animation:"fadeIn .2s ease both"}}>
+                <button className="press" style={{marginTop:10,width:"100%",padding:"8px 0",borderRadius:10,background:`linear-gradient(135deg,${t.primary},${t.accent})`,color:"#fff",border:"none",cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:"Poppins",boxShadow:`0 4px 14px ${t.primary}40`,animation:"fadeIn .2s ease both"}}>
                   Apply for this Task →
                 </button>
               )}
@@ -1066,7 +1187,7 @@ function Bidding({t}:any){
   return(
     <div className="su" style={{padding:"20px 0",maxWidth:720}}>
       <div style={{marginBottom:24}}>
-        <h2 style={{fontFamily:"Syne",fontSize:28,fontWeight:800,color:t.text,letterSpacing:"-0.5px"}}>Task Bidding</h2>
+        <h2 style={{fontFamily:"Poppins",fontSize:28,fontWeight:800,color:t.text,letterSpacing:"-0.5px"}}>Task Bidding</h2>
         <p style={{color:t.sub,marginTop:5,fontSize:14}}>{BIDS_DATA.length - placed.size} active tasks accepting bids</p>
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:13}}>
@@ -1089,7 +1210,7 @@ function Bidding({t}:any){
                 </div>
                 <div style={{display:"flex",alignItems:"center",gap:14}}>
                   <div style={{textAlign:"right"}}>
-                    <div style={{fontFamily:"Syne",fontSize:20,fontWeight:800,color:t.text}}>₹{task.budget}</div>
+                    <div style={{fontFamily:"Poppins",fontSize:20,fontWeight:800,color:t.text}}>₹{task.budget}</div>
                     <div style={{fontSize:10,color:t.muted}}>budget</div>
                   </div>
                   <div style={{width:28,height:28,borderRadius:8,background:t.secondary,display:"flex",alignItems:"center",justifyContent:"center",transition:"transform .2s",transform:open?"rotate(180deg)":"none"}}>
@@ -1129,12 +1250,12 @@ function Bidding({t}:any){
                             style={{width:"100%",padding:"11px 14px 11px 30px",borderRadius:12,background:t.input,border:`1.5px solid ${t.border}`,color:t.text,fontSize:14,outline:"none",backdropFilter:"blur(8px)"}}/>
                         </div>
                         <button className="press" onClick={()=>setPlaced(p=>new Set([...p,task.id]))}
-                          style={{padding:"11px 22px",borderRadius:12,background:`linear-gradient(135deg,${t.primary},${t.accent})`,color:"#fff",border:"none",cursor:"pointer",fontFamily:"Syne",fontWeight:700,fontSize:14,flexShrink:0,boxShadow:`0 4px 16px ${t.primary}40`}}>
+                          style={{padding:"11px 22px",borderRadius:12,background:`linear-gradient(135deg,${t.primary},${t.accent})`,color:"#fff",border:"none",cursor:"pointer",fontFamily:"Poppins",fontWeight:700,fontSize:14,flexShrink:0,boxShadow:`0 4px 16px ${t.primary}40`}}>
                           Place Bid
                         </button>
                       </div>
                       <textarea placeholder="Add a note to your bid (optional)…" value={note[task.id]||""} onChange={e=>setNote(p=>({...p,[task.id]:e.target.value}))}
-                        style={{padding:"10px 14px",borderRadius:12,background:t.input,border:`1.5px solid ${t.border}`,color:t.text,fontSize:13,outline:"none",resize:"none",height:60,backdropFilter:"blur(8px)",fontFamily:"DM Sans"}}/>
+                        style={{padding:"10px 14px",borderRadius:12,background:t.input,border:`1.5px solid ${t.border}`,color:t.text,fontSize:13,outline:"none",resize:"none",height:60,backdropFilter:"blur(8px)",fontFamily:"Poppins"}}/>
                     </div>
                   )}
                 </div>
@@ -1180,14 +1301,14 @@ function Chat({t}:any){
   return(
     <div className="su" style={{padding:"20px 0",maxWidth:950}}>
       <div style={{marginBottom:18}}>
-        <h2 style={{fontFamily:"Syne",fontSize:28,fontWeight:800,color:t.text,letterSpacing:"-0.5px"}}>Messages</h2>
+        <h2 style={{fontFamily:"Poppins",fontSize:28,fontWeight:800,color:t.text,letterSpacing:"-0.5px"}}>Messages</h2>
         <p style={{color:t.sub,marginTop:5,fontSize:14}}>Chat with task helpers and users</p>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"230px 1fr",gap:14,height:540}}>
         {/* Sidebar */}
         <GCard t={t} style={{display:"flex",flexDirection:"column",overflow:"hidden",padding:0}}>
           <div style={{padding:"14px 18px",borderBottom:`1px solid ${t.border}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <span style={{fontSize:13,fontWeight:800,color:t.text,fontFamily:"Syne"}}>Conversations</span>
+            <span style={{fontSize:13,fontWeight:800,color:t.text,fontFamily:"Poppins"}}>Conversations</span>
             <span style={{width:20,height:20,borderRadius:"50%",background:`linear-gradient(135deg,${t.primary},${t.accent})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,color:"#fff"}}>3</span>
           </div>
           {CONVOS_DATA.map((c,i)=>(
@@ -1218,7 +1339,7 @@ function Chat({t}:any){
               {CONVOS_DATA[active].online&&<div style={{position:"absolute",bottom:1,right:1,width:9,height:9,borderRadius:"50%",background:t.accent,border:`2px solid ${t.card}`}}/>}
             </div>
             <div style={{flex:1}}>
-              <div style={{fontSize:15,fontWeight:800,color:t.text,fontFamily:"Syne"}}>{CONVOS_DATA[active].name}</div>
+              <div style={{fontSize:15,fontWeight:800,color:t.text,fontFamily:"Poppins"}}>{CONVOS_DATA[active].name}</div>
               <div style={{fontSize:11,fontWeight:600,color:CONVOS_DATA[active].online?t.accent:t.muted,display:"flex",alignItems:"center",gap:4}}>
                 {CONVOS_DATA[active].online?<><div style={{width:6,height:6,borderRadius:"50%",background:t.accent}}/>Online</>:"Offline"}
                 <span style={{marginLeft:8,color:t.muted}}>· {CONVOS_DATA[active].role}</span>
@@ -1272,7 +1393,7 @@ function Profile({t,user,online,setOnline}:any){
     <div className="su" style={{padding:"20px 0",maxWidth:640}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:24}}>
         <div>
-          <h2 style={{fontFamily:"Syne",fontSize:28,fontWeight:800,color:t.text,letterSpacing:"-0.5px"}}>My Profile</h2>
+          <h2 style={{fontFamily:"Poppins",fontSize:28,fontWeight:800,color:t.text,letterSpacing:"-0.5px"}}>My Profile</h2>
           <p style={{fontSize:12,color:t.muted,marginTop:4,display:"flex",alignItems:"center",gap:5}}>
             <I n="info" s={11} c={t.muted}/>All data from your registration
           </p>
@@ -1286,7 +1407,7 @@ function Profile({t,user,online,setOnline}:any){
       <GCard t={t} style={{padding:"24px 24px",marginBottom:14}}>
         <div style={{display:"flex",gap:20,alignItems:"flex-start"}}>
           <div style={{position:"relative",flexShrink:0}}>
-            <div style={{width:80,height:80,borderRadius:24,background:`linear-gradient(135deg,${t.primary},${t.accent})`,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Syne",fontSize:28,fontWeight:800,color:"#fff",boxShadow:`0 0 40px ${t.glow}`}}>
+            <div style={{width:80,height:80,borderRadius:24,background:`linear-gradient(135deg,${t.primary},${t.accent})`,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Poppins",fontSize:28,fontWeight:800,color:"#fff",boxShadow:`0 0 40px ${t.glow}`}}>
               {initials}
             </div>
             <div onClick={()=>setOnline(o=>!o)} title="Click to toggle status"
@@ -1294,7 +1415,7 @@ function Profile({t,user,online,setOnline}:any){
           </div>
           <div style={{flex:1,minWidth:0}}>
             <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:10}}>
-              <h3 style={{fontFamily:"Syne",fontSize:22,fontWeight:800,color:t.text}}>{user.name}</h3>
+              <h3 style={{fontFamily:"Poppins",fontSize:22,fontWeight:800,color:t.text}}>{user.name}</h3>
               <span style={{padding:"3px 11px",borderRadius:99,fontSize:11,fontWeight:700,background:online?`${t.accent}20`:`${t.muted}15`,color:online?t.accent:t.muted,border:`1px solid ${online?t.accent+"40":t.border}`}}>
                 {online?"● Online":"● Busy"}
               </span>
@@ -1315,7 +1436,7 @@ function Profile({t,user,online,setOnline}:any){
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginTop:20,paddingTop:18,borderTop:`1px solid ${t.border}`}}>
           {[{label:"Tasks",val:"0"},{label:"Reviews",val:"—"},{label:"Rating",val:"—"}].map(s=>(
             <div key={s.label} style={{textAlign:"center",padding:"10px 0",borderRadius:12,background:t.secondary}}>
-              <div style={{fontFamily:"Syne",fontSize:20,fontWeight:800,color:t.text}}>{s.val}</div>
+              <div style={{fontFamily:"Poppins",fontSize:20,fontWeight:800,color:t.text}}>{s.val}</div>
               <div style={{fontSize:11,color:t.muted,marginTop:2}}>{s.label}</div>
             </div>
           ))}
@@ -1326,7 +1447,7 @@ function Profile({t,user,online,setOnline}:any){
       <GCard t={t} style={{overflow:"hidden",marginBottom:14}}>
         <div style={{padding:"14px 22px",borderBottom:`1px solid ${t.border}`,display:"flex",alignItems:"center",gap:8}}>
           <I n="user" s={14} c={t.primary}/>
-          <span style={{fontSize:13,fontWeight:800,color:t.text,fontFamily:"Syne"}}>Contact Information</span>
+          <span style={{fontSize:13,fontWeight:800,color:t.text,fontFamily:"Poppins"}}>Contact Information</span>
         </div>
         {[
           {ic:"mail",label:"Email Address",val:user.email},
@@ -1352,7 +1473,7 @@ function Profile({t,user,online,setOnline}:any){
       {/* Skills / Interests — real from form */}
       {ints.length>0&&(
         <GCard t={t} style={{padding:"18px 22px",marginBottom:14}}>
-          <div style={{fontSize:13,fontWeight:800,color:t.text,marginBottom:14,display:"flex",alignItems:"center",gap:8,fontFamily:"Syne"}}>
+          <div style={{fontSize:13,fontWeight:800,color:t.text,marginBottom:14,display:"flex",alignItems:"center",gap:8,fontFamily:"Poppins"}}>
             <I n="sparkles" s={14} c={t.primary}/>{user.role==="helper"?"Skills & Services Offered":"My Interests"}
           </div>
           <div style={{display:"flex",flexWrap:"wrap",gap:9}}>
@@ -1367,7 +1488,7 @@ function Profile({t,user,online,setOnline}:any){
 
       {/* Badges */}
       <GCard t={t} style={{padding:"18px 22px",marginBottom:14}}>
-        <div style={{fontSize:13,fontWeight:800,color:t.text,marginBottom:14,display:"flex",alignItems:"center",gap:8,fontFamily:"Syne"}}>
+        <div style={{fontSize:13,fontWeight:800,color:t.text,marginBottom:14,display:"flex",alignItems:"center",gap:8,fontFamily:"Poppins"}}>
           <I n="shield" s={14} c={t.primary}/>Badges & Status
         </div>
         <div style={{display:"flex",gap:9,flexWrap:"wrap",marginBottom:12}}>
@@ -1382,7 +1503,7 @@ function Profile({t,user,online,setOnline}:any){
 
       {/* Empty reviews */}
       <GCard t={t} style={{padding:"22px 24px"}}>
-        <div style={{fontSize:13,fontWeight:800,color:t.text,marginBottom:18,fontFamily:"Syne"}}>Community Reviews</div>
+        <div style={{fontSize:13,fontWeight:800,color:t.text,marginBottom:18,fontFamily:"Poppins"}}>Community Reviews</div>
         <div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"24px 0",gap:12}}>
           <div style={{width:56,height:56,borderRadius:18,background:t.secondary,display:"flex",alignItems:"center",justifyContent:"center",border:`1px solid ${t.border}`}}>
             <I n="star" s={26} c={t.muted}/>
@@ -1403,7 +1524,7 @@ function Profile({t,user,online,setOnline}:any){
 export default function App(){
   injectCSS();
   const { user: authUser, profile, loading: authLoading, signOut } = useAuth();
-  const [dark,setDark]=useState(true);
+  const [dark,setDark]=useState(false);
   const [page,setPage]=useState(authUser ? "dashboard" : "login");
   const [online,setOnline]=useState(true);
   const [wide,setWide]=useState(typeof window!=="undefined"&&window.innerWidth>=860);
@@ -1455,7 +1576,7 @@ export default function App(){
         <div style={{width:56,height:56,borderRadius:18,background:`linear-gradient(135deg,${t.primary},${t.accent})`,display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:16,boxShadow:`0 0 40px ${t.glow}`}}>
           <I n="zap" s={24} c="#fff" sw={2}/>
         </div>
-        <p style={{fontFamily:"Syne",fontSize:18,fontWeight:700}}>Loading MicroLink…</p>
+        <p style={{fontFamily:"Poppins",fontSize:18,fontWeight:700}}>Loading MicroLink…</p>
       </div>
     </div>
   );
@@ -1478,7 +1599,8 @@ export default function App(){
         )}
         <div style={{padding:loggedIn?"0 24px":0}}>
           {page==="login"    &&<LoginPage onLogin={login} t={t} isDark={dark} toggleTheme={()=>setDark(v=>!v)}/>}
-          {page==="dashboard"&&<Dashboard t={t} user={userForUI}/>}
+          {page==="dashboard"&&<Dashboard t={t} user={userForUI} setPage={setPage}/>}
+          {page==="post-task"&&<PostTask t={t} setPage={setPage}/>}
           {page==="discover" &&<Discover t={t}/>}
           {page==="bidding"  &&<Bidding t={t}/>}
           {page==="chat"     &&<Chat t={t}/>}
@@ -1491,3 +1613,4 @@ export default function App(){
     </div>
   );
 }
+
