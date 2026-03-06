@@ -72,6 +72,21 @@ export function watchTaskBids(
   });
 }
 
+export function watchHelperBids(
+  helperId: string,
+  onData: (rows: Array<BidDoc & { id: string }>) => void,
+): () => void {
+  if (!firestore) {
+    onData([]);
+    return () => undefined;
+  }
+
+  const q = query(collection(firestore, "bids"), where("helperId", "==", helperId), orderBy("updatedAt", "desc"));
+  return onSnapshot(q, (snap) => {
+    onData(snap.docs.map((d) => ({ id: d.id, ...(d.data() as BidDoc) })));
+  });
+}
+
 export async function getTaskBids(taskId: string): Promise<Array<BidDoc & { id: string }>> {
   if (!firestore) {
     return [];
@@ -129,6 +144,7 @@ export async function counterBid(
   bidId: string,
   amount: number,
   note: string,
+  fromHelper?: boolean,
 ): Promise<void> {
   if (!firestore) {
     throw new Error("Firestore is not configured");
@@ -144,7 +160,17 @@ export async function counterBid(
   const bidRef = doc(firestore, "bids", bidId);
   const snap = await getDoc(bidRef);
   const row = snap.data() as BidDoc | undefined;
-  if (row?.helperId) {
+  
+  if (fromHelper && row?.posterId) {
+    // Helper countering back to user
+    await notify(row.posterId, {
+      type: "bid_countered",
+      title: "Helper sent counter offer",
+      body: `${row.helperName} counter-offered INR ${amount}`,
+      ref: { taskId: row.taskId, bidId },
+    });
+  } else if (row?.helperId) {
+    // User countering to helper
     await notify(row.helperId, {
       type: "bid_countered",
       title: "Counter offer received",

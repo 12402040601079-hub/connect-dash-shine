@@ -23,7 +23,7 @@ import {
   requestCompletion,
   watchMyPostedTasks,
 } from "@/services/tasks";
-import { counterBid, placeBid as placeTaskBid, updateBidStatus } from "@/services/bids";
+import { counterBid, placeBid as placeTaskBid, updateBidStatus, watchHelperBids } from "@/services/bids";
 import { getMyNotifications, markNotificationRead, notify } from "@/services/notifications";
 import { submitRating } from "@/services/ratings";
 import BidList from "@/components/workflow/BidList";
@@ -983,6 +983,7 @@ function Dashboard({t,user,setPage,postedTasks,currentUid,focusTab,onFocusTabHan
   const ratingValue = user?.stats?.ratingAvg ? Number(user.stats.ratingAvg).toFixed(1) : "—";
   const [dashboardTab,setDashboardTab]=useState(user?.role==="helper"?"orders":"tasks");
   const [bidsByTask,setBidsByTask]=useState<any>({});
+  const [helperBids,setHelperBids]=useState<any[]>([]);
   const [assignedTasks,setAssignedTasks]=useState<any[]>([]);
   const [dashError,setDashError]=useState("");
   const [taskToDelete,setTaskToDelete]=useState<any>(null);
@@ -1012,6 +1013,14 @@ function Dashboard({t,user,setPage,postedTasks,currentUid,focusTab,onFocusTabHan
         next[taskId].push(row);
       });
       setBidsByTask(next);
+    });
+    return ()=>unsub();
+  },[currentUid,user?.role]);
+
+  useEffect(()=>{
+    if(!currentUid || user?.role!=="helper") return;
+    const unsub = watchHelperBids(currentUid, (rows) => {
+      setHelperBids(rows);
     });
     return ()=>unsub();
   },[currentUid,user?.role]);
@@ -1069,7 +1078,7 @@ function Dashboard({t,user,setPage,postedTasks,currentUid,focusTab,onFocusTabHan
     }
   };
 
-  const handleCounterBid = async (bidId:string) => {
+  const handleCounterBid = async (bidId:string, fromHelper?: boolean) => {
     const raw = window.prompt("Enter counter amount (INR)");
     if (!raw) return;
     const amount = Number(raw);
@@ -1079,9 +1088,47 @@ function Dashboard({t,user,setPage,postedTasks,currentUid,focusTab,onFocusTabHan
     }
     setDashError("");
     try {
-      await counterBid(bidId, amount, `Counter offer: INR ${amount}`);
+      await counterBid(bidId, amount, `Counter offer: INR ${amount}`, fromHelper);
     } catch (e:any) {
       setDashError(e?.message || "Failed to send counter bid");
+    }
+  };
+
+  const handleHelperAcceptCounterBid = async (bid: any) => {
+    // Helper accepts user's counter-offer - this means the task is accepted
+    setDashError("");
+    try {
+      // Get the task details
+      if (!firestore) throw new Error("Firestore not configured");
+      const taskRef = doc(firestore, "tasks", bid.taskId);
+      const taskSnap = await getDoc(taskRef);
+      const task = taskSnap.data();
+      if (!task) throw new Error("Task not found");
+
+      // Accept the bid and task
+      await acceptTaskBid({
+        taskId: bid.taskId,
+        bidId: bid.id,
+        helperId: currentUid,
+        posterId: bid.posterId,
+        taskTitle: task.title || "Task",
+        currentStatus: task.status,
+      });
+
+      // Switch to orders tab to show payment
+      setDashboardTab("orders");
+    } catch(err) {
+      const msg = (err as Error).message || String(err);
+      setDashError(msg);
+    }
+  };
+
+  const handleHelperRejectBid = async (bidId: string, helperId: string) => {
+    setDashError("");
+    try {
+      await updateBidStatus(bidId, "rejected");
+    } catch (e:any) {
+      setDashError(e?.message || "Failed to reject bid");
     }
   };
 
@@ -1182,7 +1229,7 @@ function Dashboard({t,user,setPage,postedTasks,currentUid,focusTab,onFocusTabHan
   ];
 
   const tabs = user?.role==="helper"
-    ? [{id:"orders",label:"Orders"}]
+    ? [{id:"bids",label:"My Bids"},{id:"orders",label:"Orders"}]
     : [{id:"tasks",label:"My Tasks"},{id:"bids",label:"Bid Alerts"},{id:"orders",label:"Orders"}];
 
   return(
@@ -1267,6 +1314,42 @@ function Dashboard({t,user,setPage,postedTasks,currentUid,focusTab,onFocusTabHan
                 onReject={handleRejectBid}
                 onCounter={handleCounterBid}
               />
+            </GCard>
+          ))}
+        </div>
+      )}
+
+      {dashboardTab==="bids" && user?.role==="helper" && (
+        <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:16}}>
+          {helperBids.length===0 && (
+            <GCard t={t} style={{padding:16,fontSize:13,color:t.muted}}>You haven't placed any bids yet.</GCard>
+          )}
+          {helperBids.map((bid:any)=>(
+            <GCard key={bid.id} t={t} style={{padding:14}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap"}}>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:14,fontWeight:700,color:t.text}}>Task ID: {bid.taskId.slice(0,12)}...</div>
+                  <div style={{fontSize:12,color:t.muted,marginTop:4}}>Your bid: INR {bid.amount}</div>
+                  <div style={{fontSize:11,color:t.muted,marginTop:2}}>Status: <span style={{color:bid.status==="accepted"?t.accent:bid.status==="rejected"?t.danger:t.warn,fontWeight:700}}>{bid.status}</span></div>
+                  {bid.note && <div style={{fontSize:11,color:t.sub,marginTop:4,fontStyle:"italic"}}>{bid.note}</div>}
+                </div>
+                {bid.status==="pending" && (
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                    <button className="press" onClick={()=>handleHelperAcceptCounterBid(bid)}
+                      style={{padding:"7px 11px",borderRadius:10,background:`${t.accent}18`,color:t.accent,border:`1px solid ${t.accent}35`,fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                      Accept
+                    </button>
+                    <button className="press" onClick={()=>handleCounterBid(bid.id, true)}
+                      style={{padding:"7px 11px",borderRadius:10,background:t.secondary,color:t.text,border:`1px solid ${t.border}`,fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                      Counter
+                    </button>
+                    <button className="press" onClick={()=>handleHelperRejectBid(bid.id, bid.helperId)}
+                      style={{padding:"7px 11px",borderRadius:10,background:`${t.danger}18`,color:t.danger,border:`1px solid ${t.danger}35`,fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                      Reject
+                    </button>
+                  </div>
+                )}
+              </div>
             </GCard>
           ))}
         </div>
