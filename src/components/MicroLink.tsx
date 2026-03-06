@@ -244,25 +244,6 @@ const INTS=[
 ];
 
 /* ═══════════════════════════════════════════════════════
-   LEAKED PASSWORD CHECK (HaveIBeenPwned k-Anonymity)
-═══════════════════════════════════════════════════════ */
-async function checkLeakedPassword(password: string): Promise<boolean> {
-  try {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(password);
-    const hashBuffer = await crypto.subtle.digest("SHA-1", data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashHex = hashArray.map(b => b.toString(16).padStart(2, "0")).join("").toUpperCase();
-    const prefix = hashHex.slice(0, 5);
-    const suffix = hashHex.slice(5);
-    const res = await fetch(`https://api.pwnedpasswords.com/range/${prefix}`);
-    if (!res.ok) return false;
-    const text = await res.text();
-    return text.split("\n").some(line => line.startsWith(suffix));
-  } catch { return false; }
-}
-
-/* ═══════════════════════════════════════════════════════
    GLASS INPUT
 ═══════════════════════════════════════════════════════ */
 function GlassInp({label,ic,type="text",value,onChange,placeholder,t,suffix,err}:any){
@@ -359,13 +340,6 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
     setAuthLoading(true);
     setAuthError("");
     try {
-      // Check for leaked/compromised passwords
-      const isLeaked = await checkLeakedPassword(form.password);
-      if (isLeaked) {
-        setAuthError("This password has been found in a data breach. Please choose a different, more secure password.");
-        setAuthLoading(false);
-        return;
-      }
       const { error } = await supabase.auth.signUp({
         email: form.email.trim().toLowerCase(),
         password: form.password,
@@ -376,6 +350,7 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
       });
       if(error) { setAuthError(error.message); setAuthLoading(false); return; }
       // Update profile with full registration data
+      // Wait briefly for the trigger to create the profile
       await new Promise(r=>setTimeout(r,1500));
       const { data: { user: newUser } } = await supabase.auth.getUser();
       if(newUser) {
@@ -445,8 +420,8 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
           <div style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:56,height:56,borderRadius:18,background:`linear-gradient(135deg,${t.primary},${t.accent})`,marginBottom:20,boxShadow:`0 0 40px ${t.glow}`}}>
             <I n="zap" s={24} c="#fff" sw={2}/>
           </div>
-          <h2 style={{fontFamily:"Syne",fontSize:28,fontWeight:800,color:t.text}}>Welcome Back</h2>
-          <p style={{color:t.sub,fontSize:14,marginTop:6}}>Sign in to access your dashboard and manage tasks</p>
+          <h2 style={{fontFamily:"Syne",fontSize:28,fontWeight:800,color:t.text}}>Welcome back</h2>
+          <p style={{color:t.sub,fontSize:14,marginTop:6}}>Sign in to your MicroLink account</p>
         </div>
         <GCard t={t} style={{padding:"26px 24px"}}>
           <div style={{display:"flex",flexDirection:"column",gap:16}}>
@@ -599,27 +574,27 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
         </div>
 
         <div style={{display:"inline-flex",alignItems:"center",gap:7,padding:"6px 20px",borderRadius:99,background:t.secondary,border:`1px solid ${t.border}`,color:t.primary,fontSize:13,fontWeight:700,marginBottom:26,backdropFilter:"blur(8px)"}}>
-          <I n="sparkles" s={13} c={t.primary}/>Your Trusted Local Services Platform
+          <I n="sparkles" s={13} c={t.primary}/>Join the MicroLink community
         </div>
 
-        <h1 style={{fontFamily:"Syne",fontSize:"clamp(34px,5.5vw,60px)",fontWeight:800,lineHeight:1.1,letterSpacing:"-1.5px",marginBottom:20}}>
-          <span style={{background:`linear-gradient(120deg,${t.primary},${t.accent})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>Discover</span>
+        <h1 style={{fontFamily:"Syne",fontSize:"clamp(38px,6vw,66px)",fontWeight:800,lineHeight:1.05,letterSpacing:"-2px",marginBottom:20}}>
+          <span style={{background:`linear-gradient(120deg,${t.primary},${t.accent})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>Earn</span>
           <span style={{color:t.muted,margin:"0 .15em"}}>·</span>
-          <span style={{background:`linear-gradient(120deg,${t.accent},#06b6d4)`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>Connect</span>
+          <span style={{background:`linear-gradient(120deg,${t.accent},#06b6d4)`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>Help</span>
           <span style={{color:t.muted,margin:"0 .15em"}}>·</span>
-          <span style={{background:`linear-gradient(120deg,#a78bfa,${t.primary})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>Deliver</span>
+          <span style={{background:`linear-gradient(120deg,#a78bfa,${t.primary})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>Grow</span>
           <br/>
-          <span style={{color:t.text,fontSize:".78em",fontWeight:700}}>On Demand</span>
+          <span style={{color:t.text,fontSize:".8em",fontWeight:700}}>Together</span>
         </h1>
 
-        <p style={{color:t.sub,fontSize:16,lineHeight:1.75,maxWidth:460,margin:"0 auto 48px"}}>
-          Post tasks, hire verified professionals, or monetize your skills — all within your neighborhood. Secure payments, real-time tracking, and community-driven trust.
+        <p style={{color:t.sub,fontSize:17,lineHeight:1.7,maxWidth:440,margin:"0 auto 52px"}}>
+          Connect with your local community — post tasks or earn money helping others nearby.
         </p>
 
         <div style={{display:"flex",gap:20,justifyContent:"center",flexWrap:"wrap"}}>
           {[
-            {r:"user",title:"I Need Help",desc:"Post tasks and hire trusted professionals near you",ic:"brief",col:t.primary,grad:t.primaryGrad,feats:["Post unlimited tasks","AI-powered matching","Secure escrow payments","Verified community reviews"]},
-            {r:"helper",title:"I Can Help",desc:"Monetize your skills and build your reputation",ic:"wrench",col:t.accent,grad:t.accentGrad,feats:["Set competitive rates","Flexible availability","Build verified portfolio","Instant secure payouts"]},
+            {r:"user",title:"Join as User",desc:"Post tasks, find verified helpers nearby",ic:"brief",col:t.primary,grad:t.primaryGrad,feats:["Post unlimited tasks","Smart AI matching","Secure escrow payments","Rate & review helpers"]},
+            {r:"helper",title:"Join as Helper",desc:"Earn by helping your community",ic:"wrench",col:t.accent,grad:t.accentGrad,feats:["Set your own rates","Flexible schedule","Build reputation","Get paid instantly"]},
           ].map(({r,title,desc,ic,col,grad,feats})=>(
             <RoleCard key={r} title={title} desc={desc} ic={ic} col={col} grad={grad} feats={feats} t={t}
               onClick={()=>{setRole(r);setStep(2);}}/>
@@ -762,15 +737,15 @@ function Sidebar({page,setPage,t,isDark,toggleTheme,online,setOnline,user}:any){
 
 function MobileNav({page,setPage,t}:any){
   return(
-    <nav style={{position:"fixed",bottom:0,left:0,right:0,background:t.mode==="dark"?"rgba(7,6,26,0.95)":"rgba(240,235,255,0.95)",backdropFilter:"blur(28px) saturate(180%)",borderTop:`1px solid ${t.border}`,display:"flex",zIndex:20,padding:"8px 4px calc(8px + env(safe-area-inset-bottom,0px))",boxShadow:`0 -4px 20px ${t.mode==="dark"?"rgba(0,0,0,0.3)":"rgba(0,0,0,0.08)"}`}}>
+    <nav style={{position:"fixed",bottom:0,left:0,right:0,background:t.mode==="dark"?"rgba(7,6,26,0.92)":"rgba(240,235,255,0.92)",backdropFilter:"blur(24px)",borderTop:`1px solid ${t.border}`,display:"flex",zIndex:20,padding:"6px 0 calc(6px + env(safe-area-inset-bottom,0px))"}}>
       {NAV.map(item=>{
         const a=page===item.id;
         return(
           <button key={item.id} onClick={()=>setPage(item.id)}
-            style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4,background:a?`${t.primary}12`:"none",border:"none",cursor:"pointer",color:a?t.primary:t.muted,padding:"8px 4px",position:"relative",borderRadius:12,margin:"0 2px",transition:"all .2s"}}>
-            {a&&<div style={{position:"absolute",top:-8,width:28,height:3,background:`linear-gradient(90deg,${t.primary},${t.accent})`,borderRadius:99}}/>}
-            <I n={item.ic} s={22}/>
-            <span style={{fontSize:10,fontWeight:a?800:500,fontFamily:"Syne",letterSpacing:"0.2px"}}>{item.label}</span>
+            style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",color:a?t.primary:t.muted,padding:"4px 0",position:"relative"}}>
+            {a&&<div style={{position:"absolute",top:-6,width:32,height:2,background:`linear-gradient(90deg,${t.primary},${t.accent})`,borderRadius:99}}/>}
+            <I n={item.ic} s={20}/>
+            <span style={{fontSize:9,fontWeight:a?800:400,fontFamily:"Syne"}}>{item.label}</span>
           </button>
         );
       })}
@@ -859,14 +834,13 @@ function Dashboard({t,user}:any){
           <div>
             <p style={{fontSize:13,color:t.muted,fontWeight:600,marginBottom:6}}>{greeting()}, {new Date().toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long"})}</p>
             <h2 style={{fontFamily:"Syne",fontSize:28,fontWeight:800,color:t.text,letterSpacing:"-0.5px"}}>
-              Welcome, {user?.name?.split(" ")[0]} 👋
+              Welcome back, {user?.name?.split(" ")[0]} 👋
             </h2>
-            <p style={{fontSize:13,color:t.sub,marginTop:4}}>Here's your activity overview and quick actions</p>
             <div style={{display:"flex",alignItems:"center",gap:8,marginTop:8}}>
               <span style={{padding:"3px 12px",borderRadius:99,fontSize:11,fontWeight:700,background:user?.role==="helper"?`${t.accent}20`:`${t.primary}20`,color:user?.role==="helper"?t.accent:t.primary,border:`1px solid ${user?.role==="helper"?t.accent+"40":t.primary+"40"}`}}>
-                {user?.role==="helper"?"⚡ Service Provider":"👤 Task Poster"}
+                {user?.role==="helper"?"⚡ Helper":"👤 User"}
               </span>
-              <span style={{fontSize:12,color:t.muted}}>Member since {user?.joinedDate}</span>
+              <span style={{fontSize:12,color:t.muted}}>Joined {user?.joinedDate}</span>
             </div>
           </div>
         </div>
@@ -976,8 +950,8 @@ function Discover({t}:any){
   return(
     <div className="su" style={{padding:"20px 0",maxWidth:950}}>
       <div style={{marginBottom:20}}>
-        <h2 style={{fontFamily:"Syne",fontSize:28,fontWeight:800,color:t.text,letterSpacing:"-0.5px"}}>Explore Nearby Tasks</h2>
-        <p style={{color:t.sub,marginTop:5,fontSize:14}}>{tasks.length} opportunities within your area — browse, filter, and apply</p>
+        <h2 style={{fontFamily:"Syne",fontSize:28,fontWeight:800,color:t.text,letterSpacing:"-0.5px"}}>Task Discovery</h2>
+        <p style={{color:t.sub,marginTop:5,fontSize:14}}>{tasks.length} tasks available near you</p>
       </div>
 
       {/* Search */}
@@ -1002,20 +976,33 @@ function Discover({t}:any){
       </div>
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
-        {/* Real OpenStreetMap */}
+        {/* Map */}
         <div style={{position:"relative",height:320,borderRadius:20,overflow:"hidden",border:`1px solid ${t.border}`}}>
-          <iframe
-            title="Nearby Tasks Map"
-            src="https://www.openstreetmap.org/export/embed.html?bbox=73.12%2C22.26%2C73.25%2C22.34&layer=mapnik"
-            style={{width:"100%",height:"100%",border:"none",filter:t.mode==="dark"?"invert(0.9) hue-rotate(180deg) brightness(0.95) contrast(0.9)":"none"}}
-            loading="lazy"
-          />
+          <div style={{position:"absolute",inset:0,background:t.mode==="dark"?"rgba(18,14,44,0.8)":"rgba(240,235,255,0.8)",backdropFilter:"blur(4px)"}}/>
+          <svg style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:.3}}>
+            <defs><pattern id="mg" width="48" height="48" patternUnits="userSpaceOnUse"><path d="M 48 0 L 0 0 0 48" fill="none" stroke={t.primary} strokeWidth=".7"/></pattern></defs>
+            <rect width="100%" height="100%" fill="url(#mg)"/>
+          </svg>
+          {/* Decorative roads */}
+          <svg style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:.2}}>
+            <line x1="0" y1="40%" x2="100%" y2="40%" stroke={t.muted} strokeWidth="1.5" strokeDasharray="8,4"/>
+            <line x1="35%" y1="0" x2="35%" y2="100%" stroke={t.muted} strokeWidth="1.5" strokeDasharray="8,4"/>
+            <line x1="70%" y1="0" x2="70%" y2="100%" stroke={t.muted} strokeWidth="1" strokeDasharray="4,6"/>
+            <line x1="0" y1="70%" x2="100%" y2="70%" stroke={t.muted} strokeWidth="1" strokeDasharray="4,6"/>
+          </svg>
+          {MAP_PINS.map((p,i)=>(
+            <div key={i} style={{position:"absolute",left:`${p.x}%`,top:`${p.y}%`,display:"flex",flexDirection:"column",alignItems:"center",animation:`slideUp .5s ease ${i*.12}s both`,zIndex:2}}>
+              <div style={{position:"relative"}}>
+                <div style={{position:"absolute",inset:-4,borderRadius:"50%",background:`${p.col}25`,animation:`ripple 2.8s ease-out ${i*.45}s infinite`}}/>
+                <div style={{width:16,height:16,borderRadius:"50%",background:p.col,border:"2.5px solid rgba(255,255,255,0.8)",position:"relative",zIndex:1,boxShadow:`0 0 12px ${p.col}70`}}/>
+              </div>
+              <span style={{marginTop:6,fontSize:9,fontWeight:800,color:t.text,background:t.mode==="dark"?"rgba(18,14,44,0.85)":"rgba(255,255,255,0.88)",backdropFilter:"blur(8px)",padding:"2px 7px",borderRadius:6,whiteSpace:"nowrap",border:`1px solid ${p.col}30`}}>{p.label}</span>
+            </div>
+          ))}
           <div style={{position:"absolute",bottom:14,left:14,background:t.mode==="dark"?"rgba(18,14,44,0.88)":"rgba(255,255,255,0.88)",backdropFilter:"blur(12px)",padding:"6px 14px",borderRadius:10,fontSize:12,color:t.text,border:`1px solid ${t.border}`,display:"flex",alignItems:"center",gap:6,fontWeight:600}}>
-            <I n="pin" s={12} c={t.primary}/>{tasks.length} tasks nearby
+            <I n="pin" s={12} c={t.primary}/>{tasks.length} tasks found
           </div>
-          <div style={{position:"absolute",top:14,right:14,background:t.mode==="dark"?"rgba(18,14,44,0.88)":"rgba(255,255,255,0.88)",backdropFilter:"blur(12px)",padding:"4px 12px",borderRadius:99,fontSize:11,color:t.accent,border:`1px solid ${t.accent}30`,fontWeight:700,display:"flex",alignItems:"center",gap:4}}>
-            <div style={{width:6,height:6,borderRadius:"50%",background:t.accent,animation:"breathe 1.5s ease-in-out infinite"}}/>LIVE
-          </div>
+          <div style={{position:"absolute",top:14,right:14,background:t.mode==="dark"?"rgba(18,14,44,0.88)":"rgba(255,255,255,0.88)",backdropFilter:"blur(12px)",padding:"4px 12px",borderRadius:99,fontSize:11,color:t.accent,border:`1px solid ${t.accent}30`,fontWeight:700}}>● LIVE</div>
         </div>
 
         {/* Task list */}
@@ -1079,8 +1066,8 @@ function Bidding({t}:any){
   return(
     <div className="su" style={{padding:"20px 0",maxWidth:720}}>
       <div style={{marginBottom:24}}>
-        <h2 style={{fontFamily:"Syne",fontSize:28,fontWeight:800,color:t.text,letterSpacing:"-0.5px"}}>Competitive Bidding</h2>
-        <p style={{color:t.sub,marginTop:5,fontSize:14}}>{BIDS_DATA.length - placed.size} open opportunities — place your best offer</p>
+        <h2 style={{fontFamily:"Syne",fontSize:28,fontWeight:800,color:t.text,letterSpacing:"-0.5px"}}>Task Bidding</h2>
+        <p style={{color:t.sub,marginTop:5,fontSize:14}}>{BIDS_DATA.length - placed.size} active tasks accepting bids</p>
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:13}}>
         {BIDS_DATA.map((task,i)=>{
@@ -1287,7 +1274,7 @@ function Profile({t,user,online,setOnline}:any){
         <div>
           <h2 style={{fontFamily:"Syne",fontSize:28,fontWeight:800,color:t.text,letterSpacing:"-0.5px"}}>My Profile</h2>
           <p style={{fontSize:12,color:t.muted,marginTop:4,display:"flex",alignItems:"center",gap:5}}>
-            <I n="info" s={11} c={t.muted}/>Your verified identity and professional details
+            <I n="info" s={11} c={t.muted}/>All data from your registration
           </p>
         </div>
         <button className="press" style={{display:"flex",alignItems:"center",gap:7,padding:"8px 16px",borderRadius:12,background:t.secondary,border:`1px solid ${t.border}`,cursor:"pointer",color:t.muted,fontSize:12,fontWeight:600}}>
