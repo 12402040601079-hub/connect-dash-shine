@@ -1169,6 +1169,11 @@ function Dashboard({t,user,setPage,postedTasks,currentUid,focusTab,onFocusTabHan
 
   const handlePayment = async () => {
     if(!paymentTask || !currentUid || !paymentTask.acceptedBy) return;
+    if (!(["accepted", "in_progress"].includes(paymentTask.status))) {
+      setDashError("Task is not ready for payment");
+      setPaymentTask(null);
+      return;
+    }
     setPaymentBusy(true);
     setDashError("");
     try {
@@ -1267,8 +1272,18 @@ function Dashboard({t,user,setPage,postedTasks,currentUid,focusTab,onFocusTabHan
 
       {dashboardTab==="tasks" && user?.role==="user" && (
         <GCard t={t} style={{padding:"10px 0",overflow:"hidden",marginBottom:16}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 20px 12px",borderBottom:`1px solid ${t.border}`}}>
+            <div style={{fontSize:13,fontWeight:700,color:t.text}}>Your posted tasks</div>
+            <button
+              className="press"
+              onClick={()=>setPage("post-task")}
+              style={{padding:"7px 11px",borderRadius:10,background:`linear-gradient(135deg,${t.primary},${t.accent})`,color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer"}}
+            >
+              + Post Task
+            </button>
+          </div>
           {activeTaskCount===0?(
-            <div style={{padding:"18px 20px",color:t.muted,fontSize:13}}>No tasks posted yet. Use <strong>Post Task</strong> to create your first task.</div>
+            <div style={{padding:"18px 20px",color:t.muted,fontSize:13}}>No tasks posted yet. Click <strong>+ Post Task</strong> to create your first task.</div>
           ):visiblePostedTasks.map((task:any,i:number,arr:any[])=>(
             <div key={task.id} style={{padding:"14px 20px",borderBottom:i<arr.length-1?`1px solid ${t.border}`:"none"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
@@ -1372,7 +1387,7 @@ function Dashboard({t,user,setPage,postedTasks,currentUid,focusTab,onFocusTabHan
                   <span style={{fontSize:10,fontWeight:700,padding:"4px 8px",borderRadius:99,border:`1px solid ${task.paymentStatus==="paid"?t.accent+"50":t.border}`,background:task.paymentStatus==="paid"?`${t.accent}16`:t.secondary,color:task.paymentStatus==="paid"?t.accent:t.muted}}>
                     {task.paymentStatus==="paid"?"Payment Success":"Payment Pending"}
                   </span>
-                  {user?.role==="user" && task.paymentStatus!=="paid" && (
+                  {user?.role==="user" && task.paymentStatus!=="paid" && ["accepted", "in_progress"].includes(task.status) && (
                     <button className="press" onClick={()=>setPaymentTask(task)}
                       style={{padding:"7px 11px",borderRadius:10,background:`linear-gradient(135deg,${t.primary},${t.accent})`,color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer"}}>
                       Pay Now
