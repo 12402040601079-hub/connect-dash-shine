@@ -112,9 +112,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const updateProfile = async (data: Partial<Profile>) => {
     if (!user) return { error: new Error("Not authenticated") };
+    // Strip server-managed fields to prevent self-manipulation
+    const { rating, review_count, ...safeData } = data as any;
     const { error } = await supabase
       .from("profiles")
-      .update(data)
+      .update(safeData)
       .eq("user_id", user.id);
     if (!error) {
       await fetchProfile(user.id);
