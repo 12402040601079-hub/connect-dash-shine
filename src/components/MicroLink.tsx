@@ -831,15 +831,12 @@ function TopBar({t,user,online,setOnline,setPage}:any){
 /* ═══════════════════════════════════════════════════════
    DASHBOARD
 ═══════════════════════════════════════════════════════ */
-function Dashboard({t,user,setPage}:any){
-  const [taskCount,setTaskCount]=useState(0);
-  const [earned,setEarned]=useState(0);
+function Dashboard({t,user,setPage,postedTasks,onRemoveTask}:any){
+  const activeTaskCount=postedTasks?.length||0;
   const greeting=()=>{const h=new Date().getHours();return h<12?"Good morning":h<17?"Good afternoon":"Good evening";};
 
   const stats=[
-    {label:"Tasks Completed",val:taskCount,ic:"checkC",badge:"New account",col:t.accent,grad:t.accentGrad},
-    {label:"Total Earned",val:`₹${earned}`,ic:"award",badge:"Start earning!",col:t.primary,grad:t.primaryGrad},
-    {label:"Active Tasks",val:"0",ic:"clock",badge:"Browse tasks",col:t.warn,grad:`linear-gradient(135deg,${t.warn},#f97316)`},
+    {label:user?.role==="helper"?"Tasks Completed":"Tasks Posted",val:activeTaskCount,ic:"checkC",badge:activeTaskCount>0?"Updated":"Post your first task",col:t.accent,grad:t.accentGrad},    {label:"Active Tasks",val:activeTaskCount,ic:"clock",badge:activeTaskCount>0?"Live now":"Browse tasks",col:t.warn,grad:`linear-gradient(135deg,${t.warn},#f97316)`},
     {label:"Rating",val:"—",ic:"star",badge:"No reviews yet",col:"#fbbf24",grad:"linear-gradient(135deg,#fbbf24,#f59e0b)"},
   ];
 
@@ -901,6 +898,34 @@ function Dashboard({t,user,setPage}:any){
         </div>
       </div>
 
+      <div style={{marginBottom:24}}>
+        <h3 style={{fontFamily:"Poppins",fontSize:15,fontWeight:700,color:t.text,marginBottom:13}}>My Posted Tasks</h3>
+        <GCard t={t} style={{padding:"10px 0",overflow:"hidden"}}>
+          {activeTaskCount===0?(
+            <div style={{padding:"18px 20px",color:t.muted,fontSize:13}}>No tasks posted yet. Use <strong>Post Task</strong> to create your first task.</div>
+          ):postedTasks.map((task:any,i:number,arr:any[])=>(
+            <div key={task.id} style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,padding:"14px 20px",borderBottom:i<arr.length-1?`1px solid ${t.border}`:"none"}}>
+              <div>
+                <div style={{fontSize:14,fontWeight:700,color:t.text,marginBottom:4}}>{task.title}</div>
+                <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+                  <span style={{fontSize:11,color:t.muted}}>{task.category}</span>
+                  <span style={{fontSize:11,color:t.muted}}>{task.location}</span>
+                  <span style={{fontSize:11,color:t.muted}}>{task.createdAt}</span>
+                </div>
+              </div>
+              <div style={{textAlign:"right"}}>
+                <div style={{fontSize:13,fontWeight:800,color:t.text}}>INR {task.budget}</div>
+                <div style={{fontSize:10,color:task.urgent?t.danger:t.accent,fontWeight:700}}>{task.urgent?"URGENT":"OPEN"}</div>
+                <button className="press" onClick={()=>onRemoveTask(task.id)}
+                  style={{marginTop:8,padding:"5px 9px",borderRadius:8,background:`${t.danger}12`,color:t.danger,border:`1px solid ${t.danger}40`,fontSize:10,fontWeight:700,cursor:"pointer"}}>
+                  Remove
+                </button>
+              </div>
+            </div>
+          ))}
+        </GCard>
+      </div>
+
       {/* Profile info */}
       <h3 style={{fontFamily:"Poppins",fontSize:15,fontWeight:700,color:t.text,marginBottom:13}}>Your Profile Information</h3>
       <GCard t={t} style={{overflow:"hidden"}}>
@@ -932,7 +957,7 @@ function Dashboard({t,user,setPage}:any){
   );
 }
 
-function PostTask({t,setPage}:any){
+function PostTask({t,setPage,onPostTask}:any){
   const [title,setTitle]=useState("");
   const [category,setCategory]=useState("General");
   const [budget,setBudget]=useState("");
@@ -944,6 +969,15 @@ function PostTask({t,setPage}:any){
   const submit=(e:any)=>{
     e.preventDefault();
     if(!title.trim()||!budget.trim()||!location.trim()||!description.trim()) return;
+    onPostTask({
+      title:title.trim(),
+      category,
+      budget,
+      location:location.trim(),
+      description:description.trim(),
+      urgent,
+      createdAt:new Date().toLocaleString("en-IN",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}),
+    });
     setPosted(true);
   };
 
@@ -1527,6 +1561,7 @@ export default function App(){
   const [dark,setDark]=useState(false);
   const [page,setPage]=useState(authUser ? "dashboard" : "login");
   const [online,setOnline]=useState(true);
+  const [postedTasks,setPostedTasks]=useState<any[]>([]);
   const [wide,setWide]=useState(typeof window!=="undefined"&&window.innerWidth>=860);
 
   useEffect(()=>{
@@ -1569,6 +1604,13 @@ export default function App(){
     setPage("dashboard");
   },[]);
 
+  const onPostTask=useCallback((task:any)=>{
+    setPostedTasks(prev=>[{id:`task-${Date.now()}`,...task},...prev]);
+  },[]);
+  const onRemoveTask=useCallback((taskId:string)=>{
+    setPostedTasks(prev=>prev.filter(task=>task.id!==taskId));
+  },[]);
+
   if(authLoading) return (
     <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:t.bgGrad,color:t.text}}>
       <Bg t={t}/>
@@ -1599,8 +1641,8 @@ export default function App(){
         )}
         <div style={{padding:loggedIn?"0 24px":0}}>
           {page==="login"    &&<LoginPage onLogin={login} t={t} isDark={dark} toggleTheme={()=>setDark(v=>!v)}/>}
-          {page==="dashboard"&&<Dashboard t={t} user={userForUI} setPage={setPage}/>}
-          {page==="post-task"&&<PostTask t={t} setPage={setPage}/>}
+          {page==="dashboard"&&<Dashboard t={t} user={userForUI} setPage={setPage} postedTasks={postedTasks} onRemoveTask={onRemoveTask}/>}
+          {page==="post-task"&&<PostTask t={t} setPage={setPage} onPostTask={onPostTask}/>}
           {page==="discover" &&<Discover t={t}/>}
           {page==="bidding"  &&<Bidding t={t}/>}
           {page==="chat"     &&<Chat t={t}/>}
@@ -1609,8 +1651,9 @@ export default function App(){
       </main>
 
       {loggedIn&&!wide&&<MobileNav page={page} setPage={setPage} t={t}/>}
-      {loggedIn&&<VoiceBtn t={t}/>}
     </div>
   );
 }
+
+
 
