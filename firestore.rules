@@ -21,9 +21,18 @@ service cloud.firestore {
       return request.resource.data.posterId == request.auth.uid &&
         request.resource.data.title is string &&
         request.resource.data.description is string &&
+        request.resource.data.category is string &&
+        request.resource.data.location.address is string &&
+        request.resource.data.schedule.date is string &&
+        request.resource.data.schedule.time is string &&
+        (request.resource.data.paymentOptional == null || request.resource.data.paymentOptional is number) &&
         request.resource.data.status == 'open' &&
         request.resource.data.acceptedBy == null &&
         request.resource.data.acceptedBidId == null;
+    }
+
+    function validProfileRole(role) {
+      return role in ['user', 'helper'];
     }
 
     function posterAcceptingBid() {
@@ -46,6 +55,12 @@ service cloud.firestore {
         request.resource.data.status == 'completed';
     }
 
+    function posterCancellingTask() {
+      return isTaskPoster(resource.data) &&
+        resource.data.status in ['open', 'accepted', 'in_progress', 'completion_requested'] &&
+        request.resource.data.status == 'cancelled';
+    }
+
     function isParticipant(conversationId) {
       return signedIn() &&
         request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
@@ -53,8 +68,10 @@ service cloud.firestore {
 
     match /profiles/{userId} {
       allow read: if signedIn();
-      allow create: if signedIn() && request.auth.uid == userId;
-      allow update: if signedIn() && (request.auth.uid == userId || isAdmin());
+      allow create: if signedIn() && request.auth.uid == userId && validProfileRole(request.resource.data.role);
+      allow update: if signedIn() &&
+        (request.auth.uid == userId || isAdmin()) &&
+        (!request.resource.data.keys().hasAny(['role']) || validProfileRole(request.resource.data.role));
       allow delete: if false;
     }
 
@@ -62,7 +79,7 @@ service cloud.firestore {
       allow read: if signedIn();
       allow create: if signedIn() && validTaskCreate();
       allow update: if signedIn() &&
-        (posterAcceptingBid() || helperRequestingCompletion() || posterConfirmingCompletion() || isAdmin());
+        (posterAcceptingBid() || helperRequestingCompletion() || posterConfirmingCompletion() || posterCancellingTask() || isAdmin());
       allow delete: if isAdmin();
     }
 

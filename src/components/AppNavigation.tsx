@@ -1,12 +1,11 @@
 import { NavLink as RouterNavLink } from "react-router-dom";
-import { Home, Search, MessageSquare, User, Briefcase, Sun, Moon } from "lucide-react";
+import { Home, MessageSquare, User, Briefcase, Sun, Moon } from "lucide-react";
 import { useTheme } from "./ThemeProvider";
 import { motion } from "framer-motion";
 
 const navItems = [
   { to: "/dashboard", icon: Home, label: "Home" },
-  { to: "/discover", icon: Search, label: "Discover" },
-  { to: "/marketplace", icon: Briefcase, label: "Bids" },
+  { to: "/marketplace", icon: Briefcase, label: "Requests" },
   { to: "/chat", icon: MessageSquare, label: "Chat" },
   { to: "/profile", icon: User, label: "Profile" },
 ];

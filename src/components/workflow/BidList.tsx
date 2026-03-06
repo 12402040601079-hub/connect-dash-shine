@@ -9,9 +9,11 @@ type BidItem = {
 type BidListProps = {
   bids: BidItem[];
   onAccept: (bidId: string) => void;
+  onReject?: (bidId: string) => void;
+  onCounter?: (bidId: string) => void;
 };
 
-export default function BidList({ bids, onAccept }: BidListProps) {
+export default function BidList({ bids, onAccept, onReject, onCounter }: BidListProps) {
   if (bids.length === 0) {
     return <div style={{ color: "#666", fontSize: 13 }}>No bids yet.</div>;
   }
@@ -28,12 +30,26 @@ export default function BidList({ bids, onAccept }: BidListProps) {
             <div style={{ textAlign: "right" }}>
               <div style={{ fontWeight: 800 }}>INR {bid.amount}</div>
               {bid.status === "pending" && (
-                <button
-                  onClick={() => onAccept(bid.id)}
-                  style={{ marginTop: 6, border: "none", borderRadius: 8, background: "#0f766e", color: "#fff", cursor: "pointer", fontSize: 12, padding: "5px 8px" }}
-                >
-                  Accept
-                </button>
+                <div style={{ marginTop: 6, display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                  <button
+                    onClick={() => onCounter?.(bid.id)}
+                    style={{ border: "1px solid #2563eb", borderRadius: 8, background: "#eff6ff", color: "#2563eb", cursor: "pointer", fontSize: 12, padding: "5px 8px" }}
+                  >
+                    Counter
+                  </button>
+                  <button
+                    onClick={() => onReject?.(bid.id)}
+                    style={{ border: "1px solid #dc2626", borderRadius: 8, background: "#fef2f2", color: "#dc2626", cursor: "pointer", fontSize: 12, padding: "5px 8px" }}
+                  >
+                    Reject
+                  </button>
+                  <button
+                    onClick={() => onAccept(bid.id)}
+                    style={{ border: "none", borderRadius: 8, background: "#0f766e", color: "#fff", cursor: "pointer", fontSize: 12, padding: "5px 8px" }}
+                  >
+                    Accept
+                  </button>
+                </div>
               )}
             </div>
           </div>

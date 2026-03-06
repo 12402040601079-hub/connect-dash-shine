@@ -173,7 +173,7 @@ export async function requestCompletion(args: {
   await notify(args.helperId, {
     type: "completion_requested",
     title: "Completion request sent",
-    body: "Waiting for requester confirmation.",
+    body: "Waiting for user confirmation.",
     ref: { taskId: args.taskId },
   });
 }
@@ -201,7 +201,7 @@ export async function confirmCompletion(args: {
     notify(args.helperId, {
       type: "task_completed",
       title: "Task completed",
-      body: `Requester confirmed completion for ${args.taskTitle}`,
+      body: `User confirmed completion for ${args.taskTitle}`,
       ref: { taskId: args.taskId },
     }),
     notify(args.posterId, {
@@ -211,4 +211,30 @@ export async function confirmCompletion(args: {
       ref: { taskId: args.taskId },
     }),
   ]);
+}
+
+export async function cancelTask(args: {
+  taskId: string;
+  posterId: string;
+  currentStatus: TaskStatus;
+  taskTitle: string;
+  acceptedBy?: string | null;
+}): Promise<void> {
+  assertFirestore();
+
+  if (["completed", "closed", "cancelled"].includes(args.currentStatus)) {
+    throw new Error("This task can no longer be deleted");
+  }
+
+  await updateDoc(doc(firestore!, "tasks", args.taskId), {
+    status: "cancelled",
+    updatedAt: serverTimestamp(),
+  });
+
+  await notify(args.posterId, {
+    type: "admin_alert",
+    title: "Task removed",
+    body: `Your task was marked cancelled: ${args.taskTitle}`,
+    ref: { taskId: args.taskId },
+  });
 }

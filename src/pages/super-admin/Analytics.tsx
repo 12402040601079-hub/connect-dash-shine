@@ -35,7 +35,7 @@ export default function Analytics() {
     const openTasks = tasks.filter((t) => t.status === "open").length;
     const completedTasks = tasks.filter((t) => t.status === "completed").length;
     const totalUsers = profiles.length;
-    const helpers = profiles.filter((p) => p.role === "helper" || p.role === "both").length;
+    const helpers = profiles.filter((p) => p.role === "helper").length;
     const openReports = reports.filter((r) => r.status === "open" || r.status === "investigating").length;
     return { totalTasks, openTasks, completedTasks, totalUsers, helpers, openReports };
   }, [profiles, reports, tasks]);
@@ -52,7 +52,7 @@ export default function Analytics() {
           <div className="text-2xl font-semibold mt-1">{stats.totalUsers}</div>
         </div>
         <div className="bg-white dark:bg-gray-800 p-4 rounded border dark:border-gray-700">
-          <div className="text-xs text-gray-500">Helpers (including both)</div>
+          <div className="text-xs text-gray-500">Helpers</div>
           <div className="text-2xl font-semibold mt-1">{stats.helpers}</div>
         </div>
         <div className="bg-white dark:bg-gray-800 p-4 rounded border dark:border-gray-700">

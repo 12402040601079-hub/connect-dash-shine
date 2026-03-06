@@ -8,7 +8,7 @@ type Step = "landing" | "role" | "register" | "profile";
 
 const Index = () => {
   const [step, setStep] = useState<Step>("landing");
-  const [role, setRole] = useState<"poster" | "helper" | "both" | null>(null);
+  const [role, setRole] = useState<"user" | "helper" | null>(null);
   const navigate = useNavigate();
 
   return (
@@ -53,9 +53,8 @@ const Index = () => {
               <p className="text-muted-foreground text-center mb-8">Choose your role to get started</p>
               <div className="space-y-3">
                 {[
-                  { value: "poster" as const, icon: Briefcase, title: "Task Poster", desc: "Post tasks and find reliable help" },
+                  { value: "user" as const, icon: Briefcase, title: "User", desc: "Post tasks and find reliable help" },
                   { value: "helper" as const, icon: HandHelping, title: "Helper", desc: "Find jobs and earn money" },
-                  { value: "both" as const, icon: ArrowRight, title: "Both", desc: "Post tasks and help others" },
                 ].map((r) => (
                   <motion.button
                     key={r.value}

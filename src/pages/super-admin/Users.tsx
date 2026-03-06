@@ -40,7 +40,7 @@ export default function Users() {
             id: d.id,
             name: row.name || "Unknown",
             email: row.email || "",
-            role: row.role || "requester",
+            role: row.role || "user",
             suspended: Boolean(row.helperMeta?.isSuspended),
             verified: Boolean(row.helperMeta?.verified),
           };

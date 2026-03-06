@@ -3,7 +3,7 @@ export interface User {
   name: string;
   email: string;
   phone: string;
-  role: "requester" | "helper" | "both";
+  role: "user" | "helper";
   interests: string[];
   rating: number;
   joinedDate: string;

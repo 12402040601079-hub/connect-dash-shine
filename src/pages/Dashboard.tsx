@@ -2,7 +2,7 @@ import { AppLayout } from "@/components/AppLayout";
 import { GlassCard } from "@/components/GlassCard";
 import { mockTasks } from "@/data/mockData";
 import { motion } from "framer-motion";
-import { Briefcase, DollarSign, Star, TrendingUp, Plus, Search, Bell, MapPin } from "lucide-react";
+import { Briefcase, DollarSign, Star, TrendingUp, Plus, Bell, MapPin } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 const stats = [
@@ -14,7 +14,7 @@ const stats = [
 
 const quickActions = [
   { label: "Post a Task", icon: Plus, gradient: "gradient-btn" },
-  { label: "Find Tasks", icon: Search, gradient: "bg-accent text-accent-foreground" },
+  { label: "Open Requests", icon: Briefcase, gradient: "bg-accent text-accent-foreground" },
   { label: "Notifications", icon: Bell, gradient: "bg-secondary text-secondary-foreground" },
 ];
 
@@ -56,7 +56,7 @@ export default function Dashboard() {
                 transition={{ delay: i * 0.1 }}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => action.label === "Find Tasks" ? navigate("/discover") : undefined}
+                onClick={() => action.label === "Open Requests" ? navigate("/marketplace") : undefined}
                 className={`${action.gradient} rounded-2xl px-6 py-3 font-medium text-sm flex items-center gap-2 whitespace-nowrap`}
               >
                 <action.icon className="w-4 h-4" />
@@ -70,7 +70,7 @@ export default function Dashboard() {
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-display text-lg font-semibold text-foreground">Recent Tasks</h2>
-            <button onClick={() => navigate("/discover")} className="text-sm text-primary hover:underline">
+            <button onClick={() => navigate("/marketplace")} className="text-sm text-primary hover:underline">
               View all
             </button>
           </div>

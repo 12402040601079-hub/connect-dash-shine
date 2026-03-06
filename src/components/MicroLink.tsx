@@ -16,12 +16,13 @@ import {
 import { firestore } from "@/integrations/firebase/client";
 import {
   acceptBid as acceptTaskBid,
+  cancelTask,
   confirmCompletion,
   createTask,
   requestCompletion,
   watchMyPostedTasks,
 } from "@/services/tasks";
-import { placeBid as placeTaskBid } from "@/services/bids";
+import { counterBid, placeBid as placeTaskBid, updateBidStatus } from "@/services/bids";
 import { getMyNotifications, markNotificationRead } from "@/services/notifications";
 import { submitRating } from "@/services/ratings";
 import BidList from "@/components/workflow/BidList";
@@ -222,6 +223,7 @@ const IC={
   edit:["M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7","M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"],
   plus:["M12 5v14M5 12h14"],
   x:["M18 6L6 18","M6 6l12 12"],
+  trash:["M3 6h18","M8 6V4h8v2","M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6","M10 11v6","M14 11v6"],
 };
 function I({n,s=16,c="currentColor",sw=1.8}:any){
   const d=IC[n];if(!d)return null;
@@ -410,7 +412,7 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
         address: form.address.trim(),
         bio: form.bio.trim(),
         interests: normalizedInterests,
-        role: role || "requester",
+        role: role || "user",
         onboardingComplete: true,
       };
 
@@ -534,7 +536,7 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
             <I n="arL" s={16}/>
           </button>
           <div style={{flex:1}}>
-            <h2 style={{fontFamily:"Poppins",fontSize:22,fontWeight:800,color:t.text}}>{role==="helper"?"Helper Registration":role==="both"?"Requester + Helper Registration":"Requester Registration"}</h2>
+            <h2 style={{fontFamily:"Poppins",fontSize:22,fontWeight:800,color:t.text}}>{role==="helper"?"Helper Registration":"User Registration"}</h2>
             <p style={{fontSize:12,color:t.muted,marginTop:3}}>All fields become your real profile data</p>
             {socialIncomplete && <p style={{fontSize:11,color:t.primary,marginTop:4,fontWeight:700}}>Complete your profile to continue</p>}
           </div>
@@ -547,10 +549,9 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
 
         <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
           {[
-            { id: "requester", label: "Requester", color: t.primary },
+            { id: "user", label: "User", color: t.primary },
             { id: "helper", label: "Helper", color: t.accent },
-            { id: "both", label: "Both", color: "#3b82f6" },
-          ].map((opt:any)=>{
+            ].map((opt:any)=>{
             const active = role === opt.id;
             return (
               <button
@@ -728,10 +729,9 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
 
         <div style={{display:"flex",gap:20,justifyContent:"center",flexWrap:"wrap"}}>
           {[
-            {r:"requester",title:"Join as Requester",desc:"Post tasks, find verified helpers nearby",ic:"brief",col:t.primary,grad:t.primaryGrad,feats:["Post unlimited tasks","Smart AI matching","Secure escrow payments","Rate & review helpers"]},
+            {r:"user",title:"Join as User",desc:"Post tasks and manage bids from helpers",ic:"brief",col:t.primary,grad:t.primaryGrad,feats:["Post tasks","Receive helper bids","Accept or reject bids","Rate helpers"]},
             {r:"helper",title:"Join as Helper",desc:"Earn by helping your community",ic:"wrench",col:t.accent,grad:t.accentGrad,feats:["Set your own rates","Flexible schedule","Build reputation","Get paid instantly"]},
-            {r:"both",title:"Join as Both",desc:"Post tasks and help others nearby",ic:"sparkles",col:"#3b82f6",grad:"linear-gradient(135deg,#3b82f6,#06b6d4)",feats:["Switch between requester and helper","Maximize opportunities","Build trust faster","Access full workflow"]},
-          ].map(({r,title,desc,ic,col,grad,feats})=>(
+            ].map(({r,title,desc,ic,col,grad,feats})=>(
             <RoleCard key={r} title={title} desc={desc} ic={ic} col={col} grad={grad} feats={feats} t={t}
               onClick={()=>{setRole(r);setStep(2);}}/>
           ))}
@@ -799,7 +799,7 @@ function RoleCard({title,desc,ic,col,grad,feats,t,onClick}:any){
   );
 }
 
-const isAppRole = (role:any) => role === "requester" || role === "helper" || role === "both";
+const isAppRole = (role:any) => role === "user" || role === "helper";
 
 const isAdminProfile = (profile:any) => {
   if (!profile) return false;
@@ -813,12 +813,18 @@ const isAdminProfile = (profile:any) => {
 ═══════════════════════════════════════════════════════ */
 const NAV=[
   {id:"dashboard",label:"Dashboard",ic:"home"},
-  {id:"discover",label:"Discover",ic:"compass"},
-  {id:"bidding",label:"Bidding",ic:"tag"},
+  {id:"requests",label:"Requests",ic:"tag"},
   {id:"chat",label:"Chat",ic:"msg"},
   {id:"notifications",label:"Alerts",ic:"bell"},
   {id:"profile",label:"Profile",ic:"user"},
 ];
+
+const navItemsForRole = (role:string) => {
+  if (role === "user") {
+    return NAV.filter((item)=>item.id!=="requests");
+  }
+  return NAV;
+};
 
 function Sidebar({page,setPage,t,isDark,toggleTheme,online,setOnline,user,unreadCount}:any){
   const initials=user?.name?.split(" ").map(w=>w[0]).join("").toUpperCase().slice(0,2)||"?";
@@ -833,7 +839,7 @@ function Sidebar({page,setPage,t,isDark,toggleTheme,online,setOnline,user,unread
       </div>
 
       {/* Nav */}
-      {NAV.map(item=>{
+      {(user ? navItemsForRole(user.role) : NAV).map(item=>{
         const a=page===item.id;
         return(
           <button key={item.id} onClick={()=>setPage(item.id)} className="nav-item"
@@ -881,10 +887,10 @@ function Sidebar({page,setPage,t,isDark,toggleTheme,online,setOnline,user,unread
   );
 }
 
-function MobileNav({page,setPage,t}:any){
+function MobileNav({page,setPage,t,user}:any){
   return(
     <nav style={{position:"fixed",bottom:0,left:0,right:0,background:t.mode==="dark"?"rgba(7,6,26,0.92)":"rgba(240,235,255,0.92)",backdropFilter:"blur(24px)",borderTop:`1px solid ${t.border}`,display:"flex",zIndex:20,padding:"6px 0 calc(6px + env(safe-area-inset-bottom,0px))"}}>
-      {NAV.map(item=>{
+      {(user ? navItemsForRole(user.role) : NAV).map(item=>{
         const a=page===item.id;
         return(
           <button key={item.id} onClick={()=>setPage(item.id)}
@@ -971,13 +977,16 @@ function TopBar({t,user,online,setOnline,setPage,onSignOut,unreadCount}:any){
    DASHBOARD
 ═══════════════════════════════════════════════════════ */
 function Dashboard({t,user,setPage,postedTasks,currentUid}:any){
-  const activeTaskCount=postedTasks?.length||0;
-  const completedCount=(postedTasks||[]).filter((task:any)=>task?.status==="completed").length;
+  const visiblePostedTasks=(postedTasks||[]).filter((task:any)=>task?.status!=="cancelled");
+  const activeTaskCount=visiblePostedTasks.length;
+  const completedCount=visiblePostedTasks.filter((task:any)=>task?.status==="completed").length;
   const ratingValue = user?.stats?.ratingAvg ? Number(user.stats.ratingAvg).toFixed(1) : "—";
   const [bidsByTask,setBidsByTask]=useState<any>({});
   const [dashError,setDashError]=useState("");
   const [ratingTask,setRatingTask]=useState<any>(null);
   const [ratingSubmitting,setRatingSubmitting]=useState(false);
+  const [taskToDelete,setTaskToDelete]=useState<any>(null);
+  const [deleteBusy,setDeleteBusy]=useState(false);
   const greeting=()=>{const h=new Date().getHours();return h<12?"Good morning":h<17?"Good afternoon":"Good evening";};
 
   useEffect(()=>{
@@ -1029,6 +1038,31 @@ function Dashboard({t,user,setPage,postedTasks,currentUid}:any){
     }
   };
 
+  const handleRejectBid = async (bidId:string) => {
+    setDashError("");
+    try {
+      await updateBidStatus(bidId, "rejected");
+    } catch (e:any) {
+      setDashError(e?.message || "Failed to reject bid");
+    }
+  };
+
+  const handleCounterBid = async (bidId:string) => {
+    const raw = window.prompt("Enter counter amount (INR)");
+    if (!raw) return;
+    const amount = Number(raw);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setDashError("Please enter a valid counter amount");
+      return;
+    }
+    setDashError("");
+    try {
+      await counterBid(bidId, amount, `Counter offer: INR ${amount}`);
+    } catch (e:any) {
+      setDashError(e?.message || "Failed to send counter bid");
+    }
+  };
+
   const submitTaskRating = async (stars:number, review:string) => {
     if(!ratingTask?.acceptedBy || !currentUid) return;
     setRatingSubmitting(true);
@@ -1059,6 +1093,25 @@ function Dashboard({t,user,setPage,postedTasks,currentUid}:any){
     setRatingSubmitting(false);
   };
 
+  const handleDeleteTask = async () => {
+    if(!taskToDelete || !currentUid) return;
+    setDeleteBusy(true);
+    setDashError("");
+    try {
+      await cancelTask({
+        taskId: taskToDelete.id,
+        posterId: currentUid,
+        currentStatus: taskToDelete.status || "open",
+        taskTitle: taskToDelete.title || "Task",
+        acceptedBy: taskToDelete.acceptedBy || null,
+      });
+      setTaskToDelete(null);
+    } catch (e:any) {
+      setDashError(e?.message || "Failed to delete task");
+    }
+    setDeleteBusy(false);
+  };
+
   const stats=[
     {label:user?.role==="helper"?"Tasks Completed":"Tasks Posted",val:activeTaskCount,ic:"checkC",badge:activeTaskCount>0?"Updated":"Post your first task",col:t.accent},
     {label:"Completed",val:completedCount,ic:"clock",badge:completedCount>0?"Great progress":"No completions yet",col:t.warn},
@@ -1067,22 +1120,15 @@ function Dashboard({t,user,setPage,postedTasks,currentUid}:any){
 
   const quickActions = user?.role==="helper"
     ? [
-      {label:"Browse Tasks",ic:"compass",col:t.primary,target:"discover"},
-      {label:"View My Bids",ic:"tag",col:t.accent,target:"bidding"},
+      {label:"Open Requests",ic:"tag",col:t.primary,target:"requests"},
+      {label:"Accepted Requests",ic:"check",col:t.accent,target:"requests"},
       {label:"Check Messages",ic:"msg",col:"#3b82f6",target:"chat"},
     ]
-    : user?.role==="both"
-      ? [
-        {label:"Post Task",ic:"plus",col:t.primary,target:"post-task"},
-        {label:"Browse Tasks",ic:"compass",col:t.accent,target:"discover"},
-        {label:"View My Bids",ic:"tag",col:"#0ea5e9",target:"bidding"},
-        {label:"Check Messages",ic:"msg",col:"#3b82f6",target:"chat"},
-      ]
-      : [
-        {label:"Post Task",ic:"plus",col:t.primary,target:"post-task"},
-        {label:"Find Helpers",ic:"compass",col:t.accent,target:"discover"},
-        {label:"Messages",ic:"msg",col:"#3b82f6",target:"chat"},
-      ];
+    : [
+      {label:"Post Task",ic:"plus",col:t.primary,target:"post-task"},
+      {label:"Manage Tasks",ic:"brief",col:t.accent,target:"dashboard"},
+      {label:"Messages",ic:"msg",col:"#3b82f6",target:"chat"},
+    ];
 
   return(
     <div className="su" style={{padding:"20px 0",maxWidth:920}}>
@@ -1093,7 +1139,7 @@ function Dashboard({t,user,setPage,postedTasks,currentUid}:any){
         </h2>
         <div style={{display:"flex",alignItems:"center",gap:8,marginTop:8}}>
           <span style={{padding:"3px 12px",borderRadius:99,fontSize:11,fontWeight:700,background:user?.role==="helper"?`${t.accent}20`:`${t.primary}20`,color:user?.role==="helper"?t.accent:t.primary,border:`1px solid ${user?.role==="helper"?t.accent+"40":t.primary+"40"}`}}>
-            {user?.role==="helper"?"⚡ Helper":user?.role==="both"?"⚡ Both":"👤 Requester"}
+            {user?.role==="helper"?"⚡ Helper":"👤 User"}
           </span>
           <span style={{fontSize:12,color:t.muted}}>Joined {user?.joinedDate}</span>
         </div>
@@ -1134,7 +1180,7 @@ function Dashboard({t,user,setPage,postedTasks,currentUid}:any){
         <GCard t={t} style={{padding:"10px 0",overflow:"hidden"}}>
           {activeTaskCount===0?(
             <div style={{padding:"18px 20px",color:t.muted,fontSize:13}}>No tasks posted yet. Use <strong>Post Task</strong> to create your first task.</div>
-          ):(postedTasks||[]).map((task:any,i:number,arr:any[])=>(
+          ):visiblePostedTasks.map((task:any,i:number,arr:any[])=>(
             <div key={task.id} style={{padding:"14px 20px",borderBottom:i<arr.length-1?`1px solid ${t.border}`:"none"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
                 <div>
@@ -1146,8 +1192,35 @@ function Dashboard({t,user,setPage,postedTasks,currentUid}:any){
                   </div>
                 </div>
                 <div style={{textAlign:"right"}}>
-                  <div style={{fontSize:13,fontWeight:800,color:t.text}}>INR {taskBudgetValue(task)}</div>
+                  <div style={{fontSize:12,fontWeight:700,color:t.muted}}>Flexible pay</div>
                   <div style={{fontSize:10,color:t.primary,fontWeight:700,textTransform:"uppercase"}}>{task.status || "open"}</div>
+                  {!['completed','closed','cancelled'].includes(task.status || 'open') && (
+                    <button
+                      className="press"
+                      onClick={()=>setTaskToDelete(task)}
+                      style={{
+                        marginTop:8,
+                        minWidth:72,
+                        height:30,
+                        borderRadius:9,
+                        border:`1px solid ${t.danger}45`,
+                        background:`${t.danger}14`,
+                        color:t.danger,
+                        display:"inline-flex",
+                        alignItems:"center",
+                        gap:6,
+                        justifyContent:"center",
+                        cursor:"pointer",
+                        padding:"0 8px",
+                        fontSize:11,
+                        fontWeight:700,
+                      }}
+                      title="Delete task"
+                      aria-label="Delete task"
+                    >
+                      <I n="trash" s={14} c={t.danger}/>Delete
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -1158,6 +1231,8 @@ function Dashboard({t,user,setPage,postedTasks,currentUid}:any){
                       { id: bid.id, helperName: bid.helperName, amount: bid.amount, note: bid.note, status: bid.status }
                     ))}
                     onAccept={(bidId)=>handleAcceptBid(task,bidId)}
+                    onReject={handleRejectBid}
+                    onCounter={handleCounterBid}
                   />
                 </div>
               )}
@@ -1196,6 +1271,34 @@ function Dashboard({t,user,setPage,postedTasks,currentUid}:any){
         onSubmit={submitTaskRating}
       />
 
+      {taskToDelete && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.28)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:120,padding:16}}>
+          <GCard t={t} style={{width:"min(94vw,460px)",padding:"18px 18px"}}>
+            <h4 style={{fontSize:18,fontWeight:800,color:t.text,marginBottom:10}}>Delete Task</h4>
+            <p style={{fontSize:14,color:t.sub,lineHeight:1.6}}>Are you sure you want to delete this task?</p>
+            <p style={{fontSize:13,color:t.text,fontWeight:700,marginTop:8}}>{taskToDelete?.title}</p>
+            <div style={{display:"flex",justifyContent:"flex-end",gap:10,marginTop:16}}>
+              <button
+                className="press"
+                onClick={()=>setTaskToDelete(null)}
+                disabled={deleteBusy}
+                style={{padding:"8px 12px",borderRadius:10,background:t.secondary,border:`1px solid ${t.border}`,color:t.text,cursor:"pointer",fontSize:12,fontWeight:700}}
+              >
+                No
+              </button>
+              <button
+                className="press"
+                onClick={handleDeleteTask}
+                disabled={deleteBusy}
+                style={{padding:"8px 12px",borderRadius:10,background:`${t.danger}18`,border:`1px solid ${t.danger}50`,color:t.danger,cursor:"pointer",fontSize:12,fontWeight:700}}
+              >
+                {deleteBusy ? "Deleting..." : "Yes"}
+              </button>
+            </div>
+          </GCard>
+        </div>
+      )}
+
       <h3 style={{fontFamily:"Poppins",fontSize:15,fontWeight:700,color:t.text,marginBottom:13}}>Your Profile Information</h3>
       <GCard t={t} style={{overflow:"hidden"}}>
         {[
@@ -1205,7 +1308,7 @@ function Dashboard({t,user,setPage,postedTasks,currentUid}:any){
           {label:"Location",val:user?.address,ic:"pin"},
           {label:"Age",val:user?.age?`${user.age} years old`:null,ic:"cal"},
           {label:"Gender",val:user?.gender,ic:"user"},
-          {label:"Account Type",val:user?.role==="helper"?"Helper Account":user?.role==="both"?"Requester + Helper Account":"Requester Account",ic:user?.role==="helper"?"wrench":"brief"},
+          {label:"Account Type",val:user?.role==="helper"?"Helper Account":"User Account",ic:user?.role==="helper"?"wrench":"brief"},
           {label:user?.role==="helper"?"Skills & Services":"Interests",val:user?.interests?.length>0?user.interests.map((id:string)=>INTS.find(x=>x.id===id)?.label || id).join(", "):"None selected",ic:"sparkles"},
           ...(user?.bio?[{label:"Bio",val:user.bio,ic:"info"}]:[]),
         ].map((row,i,arr)=>(
@@ -1247,8 +1350,7 @@ const taskBudgetValue = (task:any) => Number(task?.paymentOptional ?? task?.budg
 
 const roleLabel = (role:string) => {
   if (role === "helper") return "Helper";
-  if (role === "both") return "Requester + Helper";
-  return "Requester";
+  return "User";
 };
 
 const isProfileComplete = (profile:any) => {
@@ -1277,9 +1379,7 @@ const convIdForTask = (taskId:string, uidA:string, uidB:string) => {
 function PostTask({t,setPage,currentUser}:any){
   const [title,setTitle]=useState("");
   const [category,setCategory]=useState("General");
-  const [budget,setBudget]=useState("");
   const [location,setLocation]=useState("");
-  const [city,setCity]=useState("");
   const [taskDate,setTaskDate]=useState("");
   const [taskTime,setTaskTime]=useState("");
   const [description,setDescription]=useState("");
@@ -1290,7 +1390,7 @@ function PostTask({t,setPage,currentUser}:any){
 
   const submit=async(e:any)=>{
     e.preventDefault();
-    if(!title.trim()||!budget.trim()||!location.trim()||!description.trim()||!taskDate||!taskTime) return;
+    if(!title.trim()||!location.trim()||!description.trim()||!taskDate||!taskTime) return;
     if(!firestore || !currentUser?.uid){
       setError("Please sign in again before posting a task.");
       return;
@@ -1302,10 +1402,10 @@ function PostTask({t,setPage,currentUser}:any){
         title: title.trim(),
         description: description.trim(),
         category,
-        paymentOptional: Number(budget),
+        paymentOptional: null,
         location: {
           address: location.trim(),
-          city: city.trim() || "Unknown",
+          city: "Unknown",
           lat: 0,
           lng: 0,
         },
@@ -1330,7 +1430,7 @@ function PostTask({t,setPage,currentUser}:any){
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,marginBottom:20,flexWrap:"wrap"}}>
         <div>
           <h2 style={{fontFamily:"Poppins",fontSize:28,fontWeight:800,color:t.text,letterSpacing:"-0.5px"}}>Post a Task</h2>
-          <p style={{color:t.sub,marginTop:5,fontSize:14}}>Create a task so nearby helpers can discover and bid.</p>
+          <p style={{color:t.sub,marginTop:5,fontSize:14}}>Create a task so nearby helpers can see your request and bid.</p>
         </div>
         <button className="press" onClick={()=>setPage("dashboard")}
           style={{padding:"9px 14px",borderRadius:12,background:t.secondary,border:`1px solid ${t.border}`,color:t.text,cursor:"pointer",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:6}}>
@@ -1345,13 +1445,13 @@ function PostTask({t,setPage,currentUser}:any){
               <I n="checkC" s={18} c={t.accent}/>
               <div>
                 <div style={{fontSize:14,fontWeight:700,color:t.text}}>Task posted successfully</div>
-                <div style={{fontSize:12,color:t.muted}}>Helpers can now find your task in Discover.</div>
+                <div style={{fontSize:12,color:t.muted}}>Helpers can now find your task in Requests.</div>
               </div>
             </div>
             <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-              <button className="press" onClick={()=>setPage("discover")}
+              <button className="press" onClick={()=>setPage("requests")}
                 style={{padding:"10px 14px",borderRadius:12,background:`linear-gradient(135deg,${t.primary},${t.accent})`,color:"#fff",border:"none",cursor:"pointer",fontSize:13,fontWeight:700}}>
-                Go to Discover
+                Go to Requests
               </button>
               <button className="press" onClick={()=>setPage("dashboard")}
                 style={{padding:"10px 14px",borderRadius:12,background:t.secondary,color:t.text,border:`1px solid ${t.border}`,cursor:"pointer",fontSize:13,fontWeight:700}}>
@@ -1367,7 +1467,7 @@ function PostTask({t,setPage,currentUser}:any){
                 style={{width:"100%",padding:"12px 14px",borderRadius:12,background:t.input,border:`1.5px solid ${t.border}`,color:t.text,fontSize:14,outline:"none"}}/>
             </div>
 
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr",gap:12}}>
               <div style={{display:"grid",gap:8}}>
                 <label style={{fontSize:12,fontWeight:700,color:t.sub}}>Category</label>
                 <select value={category} onChange={e=>setCategory(e.target.value)}
@@ -1377,11 +1477,6 @@ function PostTask({t,setPage,currentUser}:any){
                   ))}
                 </select>
               </div>
-              <div style={{display:"grid",gap:8}}>
-                <label style={{fontSize:12,fontWeight:700,color:t.sub}}>Budget (INR)</label>
-                <input type="number" min="1" value={budget} onChange={e=>setBudget(e.target.value)} placeholder="e.g. 700"
-                  style={{width:"100%",padding:"12px 14px",borderRadius:12,background:t.input,border:`1.5px solid ${t.border}`,color:t.text,fontSize:14,outline:"none"}}/>
-              </div>
             </div>
 
             <div style={{display:"grid",gap:8}}>
@@ -1390,19 +1485,14 @@ function PostTask({t,setPage,currentUser}:any){
                 style={{width:"100%",padding:"12px 14px",borderRadius:12,background:t.input,border:`1.5px solid ${t.border}`,color:t.text,fontSize:14,outline:"none"}}/>
             </div>
 
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
-              <div style={{display:"grid",gap:8}}>
-                <label style={{fontSize:12,fontWeight:700,color:t.sub}}>City</label>
-                <input value={city} onChange={e=>setCity(e.target.value)} placeholder="City"
-                  style={{width:"100%",padding:"12px 14px",borderRadius:12,background:t.input,border:`1.5px solid ${t.border}`,color:t.text,fontSize:14,outline:"none"}}/>
-              </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
               <div style={{display:"grid",gap:8}}>
                 <label style={{fontSize:12,fontWeight:700,color:t.sub}}>Date</label>
                 <input type="date" value={taskDate} onChange={e=>setTaskDate(e.target.value)}
                   style={{width:"100%",padding:"12px 14px",borderRadius:12,background:t.input,border:`1.5px solid ${t.border}`,color:t.text,fontSize:14,outline:"none"}}/>
               </div>
               <div style={{display:"grid",gap:8}}>
-                <label style={{fontSize:12,fontWeight:700,color:t.sub}}>Time</label>
+                <label style={{fontSize:12,fontWeight:700,color:t.sub}}>Expiry Time</label>
                 <input type="time" value={taskTime} onChange={e=>setTaskTime(e.target.value)}
                   style={{width:"100%",padding:"12px 14px",borderRadius:12,background:t.input,border:`1.5px solid ${t.border}`,color:t.text,fontSize:14,outline:"none"}}/>
               </div>
@@ -1444,6 +1534,9 @@ function Discover({t,currentUser}:any){
   const [sel,setSel]=useState(null);
   const [tasksRaw,setTasksRaw]=useState<any[]>([]);
   const [loading,setLoading]=useState(true);
+  const [taskToDelete,setTaskToDelete]=useState<any>(null);
+  const [deleteBusy,setDeleteBusy]=useState(false);
+  const [deleteError,setDeleteError]=useState("");
 
   useEffect(()=>{
     if(!firestore){ setLoading(false); return; }
@@ -1459,7 +1552,11 @@ function Discover({t,currentUser}:any){
 
   let tasks=[...tasksRaw]
     .filter((x:any)=>!["closed","cancelled","completed"].includes(x?.status))
-    .filter((x:any)=>currentUser?.role==="helper" ? x.posterId!==currentUser.uid : true)
+    .filter((x:any)=>{
+      if (currentUser?.role === "user") return x.posterId===currentUser.uid;
+      if (currentUser?.role === "helper") return x.posterId!==currentUser.uid;
+      return true;
+    })
     .map((x:any, idx:number)=>({
       ...x,
       loc:taskLocationLabel(x),
@@ -1481,6 +1578,24 @@ function Discover({t,currentUser}:any){
     label: task.cat,
     col: MAP_PINS_COLORS[i % MAP_PINS_COLORS.length],
   }));
+
+  const handleDeleteTask = async () => {
+    if(!taskToDelete || !currentUser?.uid) return;
+    setDeleteBusy(true);
+    setDeleteError("");
+    try {
+      await cancelTask({
+        taskId: taskToDelete.id,
+        posterId: currentUser.uid,
+        currentStatus: taskToDelete.status || "open",
+        taskTitle: taskToDelete.title || "Task",
+      });
+      setTaskToDelete(null);
+    } catch (e:any) {
+      setDeleteError(e?.message || "Failed to delete task");
+    }
+    setDeleteBusy(false);
+  };
 
   return(
     <div className="su" style={{padding:"20px 0",maxWidth:950}}>
@@ -1542,6 +1657,7 @@ function Discover({t,currentUser}:any){
 
         {/* Task list */}
         <div style={{display:"flex",flexDirection:"column",gap:10,overflowY:"auto",maxHeight:320,paddingRight:2}}>
+          {deleteError&&<p style={{fontSize:12,color:t.danger,fontWeight:700}}>⚠ {deleteError}</p>}
           {loading?(
             <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:200,gap:12,color:t.muted}}>
               <I n="clock" s={28} c={t.muted}/>
@@ -1570,19 +1686,50 @@ function Discover({t,currentUser}:any){
                   {sel===task.id&&<p style={{fontSize:12,color:t.sub,marginTop:8,lineHeight:1.5,animation:"fadeIn .2s ease both"}}>{task.desc}</p>}
                 </div>
                 <div style={{textAlign:"right",flexShrink:0}}>
-                  <div style={{fontFamily:"Poppins",fontSize:16,fontWeight:800,color:t.text}}>₹{task.budget}</div>
+                  <div style={{fontSize:12,fontWeight:700,color:t.muted}}>Flexible pay</div>
                   <div style={{fontSize:11,color:t.muted}}>{task.posted}</div>
+                  {currentUser?.role==="user" && task.posterId===currentUser?.uid && (
+                    <button
+                      className="press"
+                      type="button"
+                      onClick={(e:any)=>{e.stopPropagation();setTaskToDelete(task);}}
+                      style={{marginTop:8,display:"inline-flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:10,border:`1px solid ${t.danger}50`,background:`${t.danger}16`,color:t.danger,fontSize:11,fontWeight:700,cursor:"pointer"}}
+                      title="Delete task"
+                    >
+                      <I n="trash" s={12} c={t.danger}/>Delete
+                    </button>
+                  )}
                 </div>
               </div>
-              {sel===task.id&&(
+              {sel===task.id && currentUser?.role!=="user" &&(
                 <button className="press" style={{marginTop:10,width:"100%",padding:"8px 0",borderRadius:10,background:`linear-gradient(135deg,${t.primary},${t.accent})`,color:"#fff",border:"none",cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:"Poppins",boxShadow:`0 4px 14px ${t.primary}40`,animation:"fadeIn .2s ease both"}}>
-                  Open in Bidding →
+                  Open in Requests →
                 </button>
               )}
             </div>
           ))}
         </div>
       </div>
+
+      {taskToDelete&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.28)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:120,padding:16}}>
+          <GCard t={t} style={{width:"min(94vw,460px)",padding:"18px 18px"}}>
+            <h4 style={{fontSize:18,fontWeight:800,color:t.text,marginBottom:10}}>Delete Task</h4>
+            <p style={{fontSize:14,color:t.sub,lineHeight:1.6}}>Are you sure you want to delete this task?</p>
+            <p style={{fontSize:13,color:t.text,fontWeight:700,marginTop:8}}>{taskToDelete?.title}</p>
+            <div style={{display:"flex",justifyContent:"flex-end",gap:10,marginTop:16}}>
+              <button className="press" onClick={()=>setTaskToDelete(null)} disabled={deleteBusy}
+                style={{padding:"8px 12px",borderRadius:10,background:t.secondary,border:`1px solid ${t.border}`,color:t.text,cursor:"pointer",fontSize:12,fontWeight:700}}>
+                No
+              </button>
+              <button className="press" onClick={handleDeleteTask} disabled={deleteBusy}
+                style={{padding:"8px 12px",borderRadius:10,background:`${t.danger}18`,border:`1px solid ${t.danger}50`,color:t.danger,cursor:"pointer",fontSize:12,fontWeight:700}}>
+                {deleteBusy ? "Deleting..." : "Yes"}
+              </button>
+            </div>
+          </GCard>
+        </div>
+      )}
     </div>
   );
 }
@@ -1592,12 +1739,28 @@ function Discover({t,currentUser}:any){
 ═══════════════════════════════════════════════════════ */
 function Bidding({t,currentUser,setPage}:any){
   const [exp,setExp]=useState(null);
+  const [tab,setTab]=useState<"open"|"accepted"|"rejected">("open");
   const [amounts,setAmounts]=useState<any>({});
   const [note,setNote]=useState<any>({});
   const [tasks,setTasks]=useState<any[]>([]);
   const [myBids,setMyBids]=useState<any>({});
   const [loading,setLoading]=useState(true);
   const [actionError,setActionError]=useState("");
+
+  if(currentUser?.role === "user"){
+    return(
+      <div className="su" style={{padding:"20px 0",maxWidth:720}}>
+        <GCard t={t} style={{padding:"20px"}}>
+          <h3 style={{fontFamily:"Poppins",fontSize:22,fontWeight:800,color:t.text,marginBottom:8}}>Requests Are For Helpers</h3>
+          <p style={{fontSize:14,color:t.sub,lineHeight:1.6,marginBottom:14}}>User Accounts cannot place bids. You can post tasks and manage incoming helper bids from your dashboard.</p>
+          <button className="press" onClick={()=>setPage("dashboard")}
+            style={{padding:"10px 14px",borderRadius:12,background:`linear-gradient(135deg,${t.primary},${t.accent})`,color:"#fff",border:"none",cursor:"pointer",fontSize:13,fontWeight:700}}>
+            Back to Dashboard
+          </button>
+        </GCard>
+      </div>
+    );
+  }
 
   useEffect(()=>{
     if(!firestore || !currentUser?.uid){ setLoading(false); return; }
@@ -1606,8 +1769,9 @@ function Bidding({t,currentUser,setPage}:any){
         .map(d=>({id:d.id,...d.data()}))
         .filter((x:any)=>{
           if (x.posterId===currentUser.uid) return false;
+          const hasMyBid = Boolean(myBids[x.id]);
           const acceptedForMe = x.acceptedBy===currentUser.uid && ["accepted","in_progress","completion_requested"].includes(x.status);
-          return x.status==="open" || acceptedForMe;
+          return x.status==="open" || acceptedForMe || hasMyBid;
         });
       setTasks(rows);
       setLoading(false);
@@ -1671,17 +1835,57 @@ function Bidding({t,currentUser,setPage}:any){
     }
   };
 
+  const rejectRequest = async (task:any) => {
+    if(!currentUser?.uid) return;
+    const bidId = `${task.id}_${currentUser.uid}`;
+    setActionError("");
+    try {
+      if(!myBids[task.id]){
+        await placeTaskBid({
+          taskId: task.id,
+          helperId: currentUser.uid,
+          helperName: currentUser.name || "Helper",
+          posterId: task.posterId,
+          amount: 0,
+          note: "Rejected by helper",
+        });
+      }
+      await updateBidStatus(bidId, "withdrawn");
+    } catch (e:any) {
+      setActionError(e?.message || "Could not reject request");
+    }
+  };
+
+  const visibleTasks = tasks.filter((task:any)=>{
+    const bid = myBids[task.id];
+    if(tab==="open") return task.status==="open" && !bid;
+    if(tab==="accepted") return Boolean(bid) && ["pending","accepted"].includes(bid.status) && task.status!=="cancelled";
+    return Boolean(bid) && ["withdrawn","rejected"].includes(bid.status);
+  });
+
   return(
     <div className="su" style={{padding:"20px 0",maxWidth:720}}>
       <div style={{marginBottom:24}}>
-        <h2 style={{fontFamily:"Poppins",fontSize:28,fontWeight:800,color:t.text,letterSpacing:"-0.5px"}}>Task Bidding</h2>
+        <h2 style={{fontFamily:"Poppins",fontSize:28,fontWeight:800,color:t.text,letterSpacing:"-0.5px"}}>Requests</h2>
         <p style={{color:t.sub,marginTop:5,fontSize:14}}>
-          {loading ? "Loading tasks..." : `${tasks.filter((task:any)=>task.status==="open"&&!myBids[task.id]).length} active tasks accepting bids`}
+          {loading ? "Loading requests..." : `${visibleTasks.length} ${tab} request${visibleTasks.length===1?"":"s"}`}
         </p>
+      </div>
+      <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
+        {[
+          {id:"open",label:"Open Requests"},
+          {id:"accepted",label:"Accepted Requests"},
+          {id:"rejected",label:"Rejected Requests"},
+        ].map((opt:any)=>(
+          <button key={opt.id} className="press" onClick={()=>setTab(opt.id)}
+            style={{padding:"6px 12px",borderRadius:99,border:`1px solid ${tab===opt.id?t.primary+"66":t.border}`,background:tab===opt.id?`${t.primary}18`:t.secondary,color:tab===opt.id?t.primary:t.muted,fontSize:12,fontWeight:700,cursor:"pointer"}}>
+            {opt.label}
+          </button>
+        ))}
       </div>
       {actionError && <p style={{fontSize:12,color:t.danger,fontWeight:700,marginBottom:10}}>⚠ {actionError}</p>}
       <div style={{display:"flex",flexDirection:"column",gap:13}}>
-        {tasks.map((task:any,i:number)=>{
+        {visibleTasks.map((task:any,i:number)=>{
           const open=exp===task.id,done=!!myBids[task.id];
           const bidInfo = myBids[task.id];
           const budget = taskBudgetValue(task);
@@ -1696,15 +1900,15 @@ function Bidding({t,currentUser,setPage}:any){
                     <span style={{fontSize:9,fontWeight:800,color:t.primary,background:`${t.primary}15`,padding:"2px 8px",borderRadius:99}}>{task.category}</span>
                   </div>
                   <div style={{display:"flex",gap:14,flexWrap:"wrap"}}>
-                    {[{n:"pin",v:taskLocationLabel(task)},{n:"clock",v:fmtRelative(task.createdAt)},{n:"tag",v:done?"Bid placed":task.status==="open"?"Open for bids":"Not open"},{n:"user",v:task.posterName || "User"}].map(x=>(
+                    {[{n:"pin",v:taskLocationLabel(task)},{n:"clock",v:fmtRelative(task.createdAt)},{n:"tag",v:done?"Bid sent":task.status==="open"?"Open":"Closed"},{n:"user",v:task.posterName || "User"}].map(x=>(
                       <span key={x.v} style={{fontSize:12,color:t.muted,display:"flex",alignItems:"center",gap:4}}><I n={x.n} s={11}/>{x.v}</span>
                     ))}
                   </div>
                 </div>
                 <div style={{display:"flex",alignItems:"center",gap:14}}>
                   <div style={{textAlign:"right"}}>
-                    <div style={{fontFamily:"Poppins",fontSize:20,fontWeight:800,color:t.text}}>₹{budget}</div>
-                    <div style={{fontSize:10,color:t.muted}}>budget</div>
+                    <div style={{fontFamily:"Poppins",fontSize:16,fontWeight:700,color:t.text}}>{done ? `₹${bidInfo?.amount || 0}` : "Set your bid"}</div>
+                    <div style={{fontSize:10,color:t.muted}}>your offer</div>
                   </div>
                   <div style={{width:28,height:28,borderRadius:8,background:t.secondary,display:"flex",alignItems:"center",justifyContent:"center",transition:"transform .2s",transform:open?"rotate(180deg)":"none"}}>
                     <I n="chD" s={14} c={t.muted}/>
@@ -1729,8 +1933,8 @@ function Bidding({t,currentUser,setPage}:any){
                     <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 18px",borderRadius:12,background:`${t.accent}15`,border:`1px solid ${t.accent}30`}}>
                       <I n="checkC" s={18} c={t.accent}/>
                       <div>
-                        <div style={{fontSize:13,fontWeight:700,color:t.accent}}>Bid placed: ₹{bidInfo?.amount||budget}</div>
-                        <div style={{fontSize:11,color:t.muted}}>You can now chat with {task.posterName || "user"}</div>
+                        <div style={{fontSize:13,fontWeight:700,color:t.accent}}>Bid amount: ₹{bidInfo?.amount||0}</div>
+                        <div style={{fontSize:11,color:t.muted}}>{bidInfo?.status==="accepted"?"Accepted by user":"Waiting for user decision"}</div>
                       </div>
                       <button className="press" onClick={()=>setPage("chat")}
                         style={{marginLeft:"auto",padding:"8px 10px",borderRadius:10,background:t.secondary,border:`1px solid ${t.border}`,cursor:"pointer",color:t.text,fontSize:11,fontWeight:700}}>
@@ -1742,13 +1946,17 @@ function Bidding({t,currentUser,setPage}:any){
                       <div style={{display:"flex",gap:10}}>
                         <div style={{position:"relative",flex:1}}>
                           <span style={{position:"absolute",left:13,top:"50%",transform:"translateY(-50%)",fontSize:15,color:t.sub,fontWeight:700}}>₹</span>
-                          <input type="number" placeholder={`${budget}`} value={amounts[task.id]||""}
+                          <input type="number" placeholder="0" value={amounts[task.id]||""}
                             onChange={e=>setAmounts(p=>({...p,[task.id]:e.target.value}))}
                             style={{width:"100%",padding:"11px 14px 11px 30px",borderRadius:12,background:t.input,border:`1.5px solid ${t.border}`,color:t.text,fontSize:14,outline:"none",backdropFilter:"blur(8px)"}}/>
                         </div>
                         <button className="press" onClick={()=>placeBid(task)} disabled={task.status!=="open"}
                           style={{padding:"11px 22px",borderRadius:12,background:`linear-gradient(135deg,${t.primary},${t.accent})`,color:"#fff",border:"none",cursor:"pointer",fontFamily:"Poppins",fontWeight:700,fontSize:14,flexShrink:0,boxShadow:`0 4px 16px ${t.primary}40`}}>
-                          {task.status==="open"?"Place Bid":"Closed"}
+                          {task.status==="open"?"Accept Request":"Closed"}
+                        </button>
+                        <button className="press" onClick={()=>rejectRequest(task)} disabled={task.status!=="open"}
+                          style={{padding:"11px 16px",borderRadius:12,background:`${t.danger}18`,color:t.danger,border:`1px solid ${t.danger}40`,cursor:"pointer",fontFamily:"Poppins",fontWeight:700,fontSize:13,flexShrink:0}}>
+                          Reject
                         </button>
                       </div>
                       <textarea placeholder="Add a note to your bid (optional)…" value={note[task.id]||""} onChange={e=>setNote(p=>({...p,[task.id]:e.target.value}))}
@@ -1971,7 +2179,7 @@ function Profile({t,user,online,setOnline}:any){
                 {online?"● Online":"● Busy"}
               </span>
               <span style={{padding:"3px 11px",borderRadius:99,fontSize:11,fontWeight:700,background:`${t.primary}15`,color:t.primary,border:`1px solid ${t.primary}30`}}>
-                {user.role==="helper"?"⚡ Helper":user.role==="both"?"⚡ Both":"👤 Requester"}
+                {user.role==="helper"?"⚡ Helper":"👤 User"}
               </span>
             </div>
             {user.bio&&<p style={{fontSize:13,color:t.sub,lineHeight:1.6,marginBottom:12,fontStyle:"italic"}}>"{user.bio}"</p>}
@@ -2111,7 +2319,7 @@ export default function App(){
   const getLandingPage = useCallback((role?: string, currentProfile?: any) => {
     if (isAdminProfile(currentProfile)) return "admin";
     if (!isProfileComplete(currentProfile)) return "login";
-    return role === "helper" ? "bidding" : "dashboard";
+    return role === "helper" ? "requests" : "dashboard";
   }, []);
 
   useEffect(()=>{
@@ -2148,6 +2356,13 @@ export default function App(){
     }
   },[authUser, authLoading, page, profile, profile?.role, getLandingPage]);
 
+  useEffect(()=>{
+    if (!authUser || authLoading) return;
+    if (profile?.role === "user" && page === "requests") {
+      setPage("dashboard");
+    }
+  },[authUser, authLoading, page, profile?.role]);
+
   const t=(TH as any)[dark?"dark":"light"];
   const loggedIn=page!=="login" && !!authUser;
 
@@ -2160,7 +2375,7 @@ export default function App(){
     address: profile?.address || "",
     bio: profile?.bio || "",
     interests: profile?.interests || [],
-    role: profile?.role || "requester",
+    role: profile?.role || "user",
     joinedDate: profile?.joinedDate || new Date().toLocaleDateString("en-IN",{day:"numeric",month:"long",year:"numeric"}),
     joinedFull: profile?.joinedFull || authUser.metadata.creationTime || new Date().toISOString(),
     rating: 0,
@@ -2219,18 +2434,18 @@ export default function App(){
           {page==="login"    &&<LoginPage onLogin={login} t={t} isDark={dark} toggleTheme={()=>setDark(v=>!v)}/>}
           {page==="dashboard"&&<Dashboard t={t} user={userForUI} setPage={setPage} postedTasks={postedTasks} currentUid={authUser?.uid}/>}
           {page==="post-task"&&<PostTask t={t} setPage={setPage} currentUser={{uid: authUser?.uid, ...userForUI}}/>}
-          {page==="discover" &&<Discover t={t} currentUser={{uid: authUser?.uid, ...userForUI}}/>}
-          {page==="bidding"  &&<Bidding t={t} currentUser={{uid: authUser?.uid, ...userForUI}} setPage={setPage}/>}
+          {page==="requests"  &&<Bidding t={t} currentUser={{uid: authUser?.uid, ...userForUI}} setPage={setPage}/>}
           {page==="chat"     &&<Chat t={t} currentUser={{uid: authUser?.uid, ...userForUI}}/>}
           {page==="notifications"&&<NotificationsPage t={t} currentUser={{uid: authUser?.uid, ...userForUI}} notifications={notifications} onMarkRead={markRead}/>}
           {page==="profile"  &&<Profile t={t} user={userForUI} online={online} setOnline={setOnline}/>}
         </div>
       </main>
 
-      {loggedIn&&!wide&&<MobileNav page={page} setPage={setPage} t={t}/>}
+      {loggedIn&&!wide&&<MobileNav page={page} setPage={setPage} t={t} user={userForUI}/>}
     </div>
   );
 }
+
 
 
 

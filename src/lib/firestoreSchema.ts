@@ -1,6 +1,6 @@
 import type { Timestamp } from "firebase/firestore";
 
-export type UserRole = "requester" | "helper" | "both";
+export type UserRole = "user" | "helper";
 export type TaskStatus =
   | "open"
   | "accepted"

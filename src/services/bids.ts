@@ -101,3 +101,34 @@ export async function rejectOtherBids(taskId: string, acceptedBidId: string): Pr
       ),
   );
 }
+
+export async function updateBidStatus(
+  bidId: string,
+  status: "pending" | "accepted" | "rejected" | "withdrawn",
+): Promise<void> {
+  if (!firestore) {
+    throw new Error("Firestore is not configured");
+  }
+
+  await updateDoc(doc(firestore, "bids", bidId), {
+    status,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function counterBid(
+  bidId: string,
+  amount: number,
+  note: string,
+): Promise<void> {
+  if (!firestore) {
+    throw new Error("Firestore is not configured");
+  }
+
+  await updateDoc(doc(firestore, "bids", bidId), {
+    amount,
+    note,
+    status: "pending",
+    updatedAt: serverTimestamp(),
+  });
+}

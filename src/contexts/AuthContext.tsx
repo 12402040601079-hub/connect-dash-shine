@@ -35,7 +35,7 @@ type Profile = {
   address: string;
   bio: string;
   interests: string[];
-  role: "requester" | "helper" | "both";
+  role: "user" | "helper";
   joinedDate: string;
   joinedFull: string;
   location?: {
@@ -97,7 +97,7 @@ const makeDefaultProfile = (user: User | null): Profile | null => {
     address: "",
     bio: "",
     interests: [],
-    role: "requester",
+    role: "user",
     joinedDate: new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }),
     joinedFull: new Date().toISOString(),
     onboardingComplete: false,
