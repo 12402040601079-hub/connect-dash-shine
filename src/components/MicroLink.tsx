@@ -1,7 +1,5 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable/index";
 
 /* ═══════════════════════════════════════════════════════
    GLOBAL CSS — GLASSMORPHISM PREMIUM
@@ -295,6 +293,7 @@ function GCard({children,t,style={},className="",onClick}:any){
    LOGIN PAGE
 ═══════════════════════════════════════════════════════ */
 function LoginPage({onLogin,t,isDark,toggleTheme}:any){
+  const { user, signUp, signIn, signInWithGoogle, signInWithApple, configError } = useAuth();
   const [step,setStep]=useState(1);
   const [mode,setMode]=useState<"register"|"signin">("register");
   const [role,setRole]=useState(null);
@@ -340,33 +339,24 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
     setAuthLoading(true);
     setAuthError("");
     try {
-      const { error } = await supabase.auth.signUp({
+      const { error } = await signUp(form.email.trim().toLowerCase(), form.password, {
+        name: form.name.trim(),
         email: form.email.trim().toLowerCase(),
-        password: form.password,
-        options: {
-          data: { full_name: form.name.trim() },
-          emailRedirectTo: window.location.origin,
-        },
+        phone: form.phone.trim(),
+        age: form.age,
+        gender: form.gender,
+        address: form.address.trim(),
+        bio: form.bio.trim(),
+        interests: form.interests,
+        role: role || "user",
       });
-      if(error) { setAuthError(error.message); setAuthLoading(false); return; }
-      // Update profile with full registration data
-      // Wait briefly for the trigger to create the profile
-      await new Promise(r=>setTimeout(r,1500));
-      const { data: { user: newUser } } = await supabase.auth.getUser();
-      if(newUser) {
-        await supabase.from("profiles").update({
-          name: form.name.trim(),
-          phone: form.phone.trim(),
-          age: parseInt(form.age) || null,
-          gender: form.gender || null,
-          address: form.address.trim(),
-          bio: form.bio.trim(),
-          interests: form.interests,
-          role: role || 'user',
-        }).eq("user_id", newUser.id);
+      if (error) {
+        setAuthError(error.message || "Registration failed");
+        setAuthLoading(false);
+        return;
       }
       setStep(3);
-      setTimeout(()=>onLogin(), 2000);
+      setTimeout(()=>onLogin(), 1200);
     } catch(e:any) {
       setAuthError(e.message || "Registration failed");
     }
@@ -377,33 +367,44 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
     if(!form.email||!form.password){setAuthError("Email and password required");return;}
     setAuthLoading(true);
     setAuthError("");
-    const { error } = await supabase.auth.signInWithPassword({
-      email: form.email.trim().toLowerCase(),
-      password: form.password,
-    });
-    if(error) { setAuthError(error.message); setAuthLoading(false); return; }
+    const { error } = await signIn(form.email.trim().toLowerCase(), form.password);
+    if (error) {
+      setAuthError(error.message || "Sign in failed");
+      setAuthLoading(false);
+      return;
+    }
     setStep(3);
-    setTimeout(()=>onLogin(), 1500);
+    setTimeout(()=>onLogin(), 1200);
     setAuthLoading(false);
   };
 
   const socialLogin=async(provider:"google"|"apple")=>{
     setAuthLoading(true);
     setAuthError("");
-    const { error } = await lovable.auth.signInWithOAuth(provider, {
-      redirect_uri: window.location.origin,
-    });
-    if(error) { setAuthError((error as any).message || "OAuth failed"); setAuthLoading(false); }
+    const result = provider === "google" ? await signInWithGoogle() : await signInWithApple();
+    if (result.error) {
+      setAuthError(result.error.message || "OAuth failed");
+      setAuthLoading(false);
+      return;
+    }
+    if (result.redirected) {
+      return;
+    }
+    setStep(3);
+    setTimeout(()=>onLogin(), 1200);
+    setAuthLoading(false);
   };
 
   /* Step 3 */
+  const welcomeName = (form.name?.trim() || user?.displayName || user?.email?.split("@")[0] || "User").split(" ")[0];
+
   if(step===3) return(
     <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:24}}>
       <div style={{width:88,height:88,borderRadius:"50%",background:`linear-gradient(135deg,${t.primary},${t.accent})`,display:"flex",alignItems:"center",justifyContent:"center",animation:"spinIn .75s cubic-bezier(.22,1,.36,1) both",boxShadow:`0 0 60px ${t.glow}`}}>
         <I n="check" s={40} c="#fff" sw={2.5}/>
       </div>
       <div style={{textAlign:"center"}}>
-        <h2 className="su1" style={{fontFamily:"Poppins",fontSize:34,fontWeight:800,color:t.text,marginBottom:10}}>Welcome, {form.name.split(" ")[0]}!</h2>
+        <h2 className="su1" style={{fontFamily:"Syne",fontSize:34,fontWeight:800,color:t.text,marginBottom:10}}>Welcome, {welcomeName}!</h2>
         <p className="su2" style={{color:t.sub,fontSize:16}}>Preparing your {role==="helper"?"helper":"user"} dashboard…</p>
       </div>
       <div className="su3" style={{display:"flex",gap:8}}>
@@ -429,7 +430,7 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
             <GlassInp label="Password" ic="shield" type={showPw?"text":"password"} value={form.password} onChange={(e:any)=>upd("password",e.target.value)} placeholder="Your password" t={t}
               suffix={<button onClick={()=>setShowPw(s=>!s)} style={{background:"none",border:"none",cursor:"pointer",color:t.muted,display:"flex",padding:0}}><I n={showPw?"eyeO":"eye"} s={15}/></button>}
             />
-            {authError&&<p style={{fontSize:12,color:t.danger,fontWeight:600,textAlign:"center"}}>⚠ {authError}</p>}
+            {(authError||configError)&&<p style={{fontSize:12,color:t.danger,fontWeight:600,textAlign:"center"}}>⚠ {authError||configError}</p>}
             <button className="press" onClick={signInSubmit} disabled={authLoading}
               style={{width:"100%",padding:"14px 0",borderRadius:14,background:`linear-gradient(135deg,${t.primary},${t.accent})`,color:"#fff",border:"none",cursor:"pointer",fontFamily:"Poppins",fontWeight:800,fontSize:15,opacity:authLoading?.6:1}}>
               {authLoading?"Signing in…":"Sign In"}
@@ -548,7 +549,7 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
             </div>
           </div>
 
-          {authError&&<p style={{fontSize:12,color:t.danger,fontWeight:600,textAlign:"center",marginTop:12}}>⚠ {authError}</p>}
+          {(authError||configError)&&<p style={{fontSize:12,color:t.danger,fontWeight:600,textAlign:"center",marginTop:12}}>⚠ {authError||configError}</p>}
           <button className="press" onClick={submit} disabled={authLoading}
             style={{marginTop:24,width:"100%",padding:"14px 0",borderRadius:14,background:`linear-gradient(135deg,${t.primary},${t.accent})`,color:"#fff",border:"none",cursor:"pointer",fontFamily:"Poppins",fontWeight:800,fontSize:15,display:"flex",alignItems:"center",justifyContent:"center",gap:10,boxShadow:`0 8px 28px ${t.primary}50`,letterSpacing:"0.3px",opacity:authLoading?.6:1}}>
             {authLoading?"Creating account…":<>Create My Account <I n="arR" s={17} c="#fff" sw={2.5}/></>}
@@ -636,7 +637,7 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
           <button onClick={()=>{setMode("signin");setStep(2);setRole(null);}} style={{background:"none",border:"none",cursor:"pointer",color:t.primary,fontSize:13,fontWeight:700,marginTop:4}}>
             Already have an account? Sign in →
           </button>
-          {authError&&<p style={{fontSize:12,color:t.danger,fontWeight:600,textAlign:"center"}}>{authError}</p>}
+          {(authError||configError)&&<p style={{fontSize:12,color:t.danger,fontWeight:600,textAlign:"center"}}>{authError||configError}</p>}
         </div>
       </div>
     </div>
@@ -812,7 +813,7 @@ function VoiceBtn({t}:any){
   );
 }
 
-function TopBar({t,user,online,setOnline,setPage}:any){
+function TopBar({t,user,online,setOnline,setPage,onSignOut}:any){
   const initials=user?.name?.split(" ").map(w=>w[0]).join("").toUpperCase().slice(0,2)||"?";
   return(
     <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",padding:"14px 0 6px",gap:12}}>
@@ -820,6 +821,11 @@ function TopBar({t,user,online,setOnline,setPage}:any){
         <div style={{width:8,height:8,borderRadius:"50%",background:online?t.accent:t.muted,boxShadow:online?`0 0 8px ${t.accent}`:"none",transition:"all .2s"}}/>
         <span style={{fontSize:12,fontWeight:700,color:online?t.accent:t.muted}}>{online?"Online":"Busy"}</span>
       </div>
+      <button onClick={onSignOut}
+        style={{display:"flex",alignItems:"center",gap:6,padding:"8px 12px",borderRadius:99,background:t.secondary,border:`1px solid ${t.border}`,cursor:"pointer",color:t.muted,fontSize:12,fontWeight:700}}>
+        <I n="x" s={12} c={t.muted}/>
+        Sign out
+      </button>
       <button onClick={()=>setPage("profile")}
         style={{width:38,height:38,borderRadius:"50%",background:`linear-gradient(135deg,${t.primary},${t.accent})`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800,color:"#fff",fontFamily:"Poppins",boxShadow:`0 0 16px ${t.glow}`}}>
         {initials}
@@ -1549,25 +1555,29 @@ export default function App(){
   const t=(TH as any)[dark?"dark":"light"];
   const loggedIn=page!=="login" && !!authUser;
 
-  // Convert profile to the format the UI expects
-  const userForUI = profile ? {
-    name: profile.name || authUser?.email?.split("@")[0] || "User",
-    email: profile.email || authUser?.email || "",
-    phone: profile.phone || "",
-    age: profile.age ? String(profile.age) : "",
-    gender: profile.gender || "",
-    address: profile.address || "",
-    bio: profile.bio || "",
-    interests: profile.interests || [],
-    role: profile.role || "user",
-    joinedDate: new Date(profile.created_at).toLocaleDateString("en-IN",{day:"numeric",month:"long",year:"numeric"}),
-    joinedFull: profile.created_at,
-    rating: profile.rating,
+  const userForUI = authUser ? {
+    name: profile?.name || authUser.displayName || authUser.email?.split("@")[0] || "User",
+    email: profile?.email || authUser.email || "",
+    phone: profile?.phone || "",
+    age: profile?.age || "",
+    gender: profile?.gender || "",
+    address: profile?.address || "",
+    bio: profile?.bio || "",
+    interests: profile?.interests || [],
+    role: profile?.role || "user",
+    joinedDate: profile?.joinedDate || new Date().toLocaleDateString("en-IN",{day:"numeric",month:"long",year:"numeric"}),
+    joinedFull: profile?.joinedFull || authUser.metadata.creationTime || new Date().toISOString(),
+    rating: 0,
   } : null;
 
   const login=useCallback(()=>{
     setPage("dashboard");
   },[]);
+
+  const handleSignOut = useCallback(async () => {
+    await signOut();
+    setPage("login");
+  }, [signOut]);
 
   if(authLoading) return (
     <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:t.bgGrad,color:t.text}}>
@@ -1594,7 +1604,7 @@ export default function App(){
       <main style={{flex:1,position:"relative",zIndex:1,overflowY:"auto",paddingBottom:loggedIn&&!wide?80:0,minHeight:"100vh"}}>
         {loggedIn&&(
           <div style={{padding:"0 24px"}}>
-            <TopBar t={t} user={userForUI} online={online} setOnline={setOnline} setPage={setPage}/>
+            <TopBar t={t} user={userForUI} online={online} setOnline={setOnline} setPage={setPage} onSignOut={handleSignOut}/>
           </div>
         )}
         <div style={{padding:loggedIn?"0 24px":0}}>
