@@ -839,10 +839,12 @@ function TopBar({t,user,online,setOnline,setPage,onSignOut}:any){
 ═══════════════════════════════════════════════════════ */
 function Dashboard({t,user,setPage,postedTasks,onRemoveTask}:any){
   const activeTaskCount=postedTasks?.length||0;
+  const [taskToRemove,setTaskToRemove]=useState<any>(null);
   const greeting=()=>{const h=new Date().getHours();return h<12?"Good morning":h<17?"Good afternoon":"Good evening";};
 
   const stats=[
-    {label:user?.role==="helper"?"Tasks Completed":"Tasks Posted",val:activeTaskCount,ic:"checkC",badge:activeTaskCount>0?"Updated":"Post your first task",col:t.accent,grad:t.accentGrad},    {label:"Active Tasks",val:activeTaskCount,ic:"clock",badge:activeTaskCount>0?"Live now":"Browse tasks",col:t.warn,grad:`linear-gradient(135deg,${t.warn},#f97316)`},
+    {label:user?.role==="helper"?"Tasks Completed":"Tasks Posted",val:activeTaskCount,ic:"checkC",badge:activeTaskCount>0?"Updated":"Post your first task",col:t.accent,grad:t.accentGrad},
+    {label:"Active Tasks",val:activeTaskCount,ic:"clock",badge:activeTaskCount>0?"Live now":"Browse tasks",col:t.warn,grad:`linear-gradient(135deg,${t.warn},#f97316)`},
     {label:"Rating",val:"—",ic:"star",badge:"No reviews yet",col:"#fbbf24",grad:"linear-gradient(135deg,#fbbf24,#f59e0b)"},
   ];
 
@@ -922,7 +924,7 @@ function Dashboard({t,user,setPage,postedTasks,onRemoveTask}:any){
               <div style={{textAlign:"right"}}>
                 <div style={{fontSize:13,fontWeight:800,color:t.text}}>INR {task.budget}</div>
                 <div style={{fontSize:10,color:task.urgent?t.danger:t.accent,fontWeight:700}}>{task.urgent?"URGENT":"OPEN"}</div>
-                <button className="press" onClick={()=>onRemoveTask(task.id)}
+                <button className="press" onClick={()=>setTaskToRemove(task)}
                   style={{marginTop:8,padding:"5px 9px",borderRadius:8,background:`${t.danger}12`,color:t.danger,border:`1px solid ${t.danger}40`,fontSize:10,fontWeight:700,cursor:"pointer"}}>
                   Remove
                 </button>
@@ -931,6 +933,28 @@ function Dashboard({t,user,setPage,postedTasks,onRemoveTask}:any){
           ))}
         </GCard>
       </div>
+
+      {taskToRemove&&(
+        <div style={{position:"fixed",inset:0,background:"transparent",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,padding:16}}>
+          <GCard t={t} style={{width:"min(100%,420px)",padding:"18px 18px"}}>
+            <h4 style={{fontSize:18,fontWeight:800,color:t.text,marginBottom:8}}>Confirm Remove</h4>
+            <p style={{fontSize:14,color:t.sub,lineHeight:1.5,marginBottom:16}}>Are you want to remove the task?</p>
+            <div style={{display:"flex",justifyContent:"flex-end",gap:10}}>
+              <button className="press" onClick={()=>setTaskToRemove(null)}
+                style={{padding:"8px 12px",borderRadius:10,background:t.secondary,border:`1px solid ${t.border}`,color:t.text,cursor:"pointer",fontSize:12,fontWeight:700}}>
+                Cancel
+              </button>
+              <button className="press" onClick={()=>{
+                onRemoveTask(taskToRemove.id);
+                setTaskToRemove(null);
+              }}
+                style={{padding:"8px 12px",borderRadius:10,background:`${t.danger}18`,border:`1px solid ${t.danger}40`,color:t.danger,cursor:"pointer",fontSize:12,fontWeight:700}}>
+                Remove
+              </button>
+            </div>
+          </GCard>
+        </div>
+      )}
 
       {/* Profile info */}
       <h3 style={{fontFamily:"Poppins",fontSize:15,fontWeight:700,color:t.text,marginBottom:13}}>Your Profile Information</h3>
@@ -1576,16 +1600,20 @@ export default function App(){
     return()=>window.removeEventListener("resize",h);
   },[]);
 
+  const getLandingPage = useCallback((role?: string) => {
+    return role === "helper" ? "bidding" : "dashboard";
+  }, []);
+
   // Auto-navigate based on auth state
   useEffect(()=>{
     if(!authLoading){
       if(authUser && page==="login"){
-        setPage("dashboard");
+        setPage(getLandingPage(profile?.role));
       } else if(!authUser && page!=="login"){
         setPage("login");
       }
     }
-  },[authUser, authLoading, page]);
+  },[authUser, authLoading, page, profile?.role, getLandingPage]);
 
   const t=(TH as any)[dark?"dark":"light"];
   const loggedIn=page!=="login" && !!authUser;
@@ -1606,8 +1634,8 @@ export default function App(){
   } : null;
 
   const login=useCallback(()=>{
-    setPage("dashboard");
-  },[]);
+    setPage(getLandingPage(profile?.role));
+  },[getLandingPage, profile?.role]);
 
   const onPostTask=useCallback((task:any)=>{
     setPostedTasks(prev=>[{id:`task-${Date.now()}`,...task},...prev]);
