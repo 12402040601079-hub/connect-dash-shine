@@ -1,5 +1,17 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import {
+  addDoc,
+  collection,
+  doc,
+  onSnapshot,
+  query,
+  serverTimestamp,
+  setDoc,
+  where,
+  orderBy,
+} from "firebase/firestore";
+import { firestore } from "@/integrations/firebase/client";
 
 /* ═══════════════════════════════════════════════════════
    GLOBAL CSS — GLASSMORPHISM PREMIUM
@@ -938,7 +950,24 @@ function Dashboard({t,user,setPage}:any){
   );
 }
 
-function PostTask({t,setPage}:any){
+const fmtRelative = (value:any) => {
+  if (!value) return "just now";
+  const dt = typeof value?.toDate === "function" ? value.toDate() : new Date(value);
+  if (Number.isNaN(dt.getTime())) return "just now";
+  const diffMin = Math.max(1, Math.floor((Date.now() - dt.getTime()) / 60000));
+  if (diffMin < 60) return `${diffMin} min ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr} hr ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  return `${diffDay} day${diffDay > 1 ? "s" : ""} ago`;
+};
+
+const convIdForTask = (taskId:string, uidA:string, uidB:string) => {
+  const [x, y] = [uidA, uidB].sort();
+  return `${taskId}_${x}_${y}`;
+};
+
+function PostTask({t,setPage,currentUser}:any){
   const [title,setTitle]=useState("");
   const [category,setCategory]=useState("General");
   const [budget,setBudget]=useState("");
@@ -946,11 +975,39 @@ function PostTask({t,setPage}:any){
   const [description,setDescription]=useState("");
   const [urgent,setUrgent]=useState(false);
   const [posted,setPosted]=useState(false);
+  const [saving,setSaving]=useState(false);
+  const [error,setError]=useState("");
 
-  const submit=(e:any)=>{
+  const submit=async(e:any)=>{
     e.preventDefault();
     if(!title.trim()||!budget.trim()||!location.trim()||!description.trim()) return;
+    if(!firestore || !currentUser?.uid){
+      setError("Please sign in again before posting a task.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try{
+      await addDoc(collection(firestore, "tasks"), {
+        title: title.trim(),
+        category,
+        budget: Number(budget),
+        location: location.trim(),
+        description: description.trim(),
+        urgent,
+        posterId: currentUser.uid,
+        posterName: currentUser.name || "User",
+        posterRole: currentUser.role || "user",
+        status: "open",
+        createdAt: serverTimestamp(),
+      });
+    } catch (e:any){
+      setError(e?.message || "Failed to post task");
+      setSaving(false);
+      return;
+    }
     setPosted(true);
+    setSaving(false);
   };
 
   return(
@@ -1030,9 +1087,10 @@ function PostTask({t,setPage}:any){
               <span style={{fontSize:13,color:t.text,fontWeight:600}}>Mark this task as urgent</span>
             </label>
 
-            <button className="press" type="submit"
+            {error&&<p style={{fontSize:12,color:t.danger,fontWeight:700}}>⚠ {error}</p>}
+            <button className="press" type="submit" disabled={saving}
               style={{marginTop:6,padding:"12px 16px",borderRadius:12,background:`linear-gradient(135deg,${t.primary},${t.accent})`,color:"#fff",border:"none",cursor:"pointer",fontSize:14,fontWeight:800}}>
-              Publish Task
+              {saving ? "Publishing..." : "Publish Task"}
             </button>
           </form>
         )}
@@ -1044,35 +1102,51 @@ function PostTask({t,setPage}:any){
 /* ═══════════════════════════════════════════════════════
    DISCOVER
 ═══════════════════════════════════════════════════════ */
-const TASKS_DATA=[
-  {id:1,title:"Math Tutor Needed",loc:"Alkapuri, Vadodara",budget:700,cat:"Tutoring",urgent:false,dist:"1.2 km",desc:"Need a patient math tutor for Class 10 board prep. 3 sessions/week.",poster:"Rahul M.",posted:"45 min ago",rating:4.8},
-  {id:2,title:"Laptop WiFi Repair",loc:"Manjalpur, Vadodara",budget:500,cat:"Repair",urgent:true,dist:"2.4 km",desc:"WiFi stopped working after an update. Need urgent diagnosis + fix.",poster:"Sneha K.",posted:"1 hr ago",rating:4.6},
-  {id:3,title:"Grocery Pickup",loc:"Karelibaug",budget:200,cat:"Delivery",urgent:false,dist:"0.8 km",desc:"Pick up groceries from Reliance Fresh and deliver to my apartment.",poster:"Amit P.",posted:"2 hr ago",rating:4.9},
-  {id:4,title:"Kitchen Sink Plumbing",loc:"Gotri",budget:600,cat:"Repair",urgent:true,dist:"3.1 km",desc:"Persistent kitchen sink leak. Need experienced plumber ASAP.",poster:"Priya S.",posted:"3 hr ago",rating:4.7},
-  {id:5,title:"React Developer Help",loc:"Fatehgunj",budget:900,cat:"Tech",urgent:false,dist:"1.8 km",desc:"Need help debugging a React app. 2-3 hours of pair programming.",poster:"Dev R.",posted:"4 hr ago",rating:5.0},
-  {id:6,title:"Dog Walking",loc:"Sama",budget:300,cat:"Pet Care",urgent:false,dist:"2.2 km",desc:"Walk my Golden Retriever daily for 30 mins. Morning preferred.",poster:"Nisha T.",posted:"5 hr ago",rating:4.5},
-];
-const MAP_PINS=[
-  {x:22,y:25,label:"Tutor",col:"#3b82f6"},
-  {x:58,y:18,label:"Repair",col:"#f59e0b"},
-  {x:36,y:60,label:"Delivery",col:"#06d6a0"},
-  {x:72,y:48,label:"Plumbing",col:"#f87171"},
-  {x:48,y:38,label:"Tech",col:"#8b5cf6"},
-  {x:82,y:72,label:"Pet Care",col:"#ec4899"},
-];
+const MAP_PINS_COLORS=["#3b82f6","#f59e0b","#06d6a0","#f87171","#8b5cf6","#ec4899"];
 
-function Discover({t}:any){
+function Discover({t,currentUser}:any){
   const [q,setQ]=useState("");
   const [filt,setFilt]=useState("All");
   const [cat,setCat]=useState(null);
   const [sel,setSel]=useState(null);
+  const [tasksRaw,setTasksRaw]=useState<any[]>([]);
+  const [loading,setLoading]=useState(true);
 
-  let tasks=[...TASKS_DATA];
+  useEffect(()=>{
+    if(!firestore){ setLoading(false); return; }
+    const qTasks = query(collection(firestore, "tasks"), orderBy("createdAt", "desc"));
+    const unsub = onSnapshot(qTasks, snap=>{
+      setTasksRaw(snap.docs.map(d=>({id:d.id,...d.data()})));
+      setLoading(false);
+    }, ()=>{
+      setLoading(false);
+    });
+    return ()=>unsub();
+  },[]);
+
+  let tasks=[...tasksRaw]
+    .filter((x:any)=>x?.status!=="closed")
+    .filter((x:any)=>currentUser?.role==="helper" ? x.posterId!==currentUser.uid : true)
+    .map((x:any, idx:number)=>({
+      ...x,
+      loc:x.location||"Unknown",
+      cat:x.category||"General",
+      desc:x.description||"",
+      poster:x.posterName||"User",
+      posted:fmtRelative(x.createdAt),
+      dist:`${((idx%8)+1)/2} km`,
+    }));
   if(q)tasks=tasks.filter(x=>x.title.toLowerCase().includes(q.toLowerCase())||x.desc.toLowerCase().includes(q.toLowerCase()));
   if(cat)tasks=tasks.filter(x=>x.cat===cat);
   if(filt==="High Pay")tasks=[...tasks].sort((a,b)=>b.budget-a.budget);
   if(filt==="Urgent")tasks=tasks.filter(x=>x.urgent);
   if(filt==="Nearby")tasks=[...tasks].sort((a,b)=>parseFloat(a.dist)-parseFloat(b.dist));
+  const mapPins = tasks.slice(0,6).map((task:any, i:number)=>({
+    x: 18 + ((i*13)%62),
+    y: 20 + ((i*11)%58),
+    label: task.cat,
+    col: MAP_PINS_COLORS[i % MAP_PINS_COLORS.length],
+  }));
 
   return(
     <div className="su" style={{padding:"20px 0",maxWidth:950}}>
@@ -1117,7 +1191,7 @@ function Discover({t}:any){
             <line x1="70%" y1="0" x2="70%" y2="100%" stroke={t.muted} strokeWidth="1" strokeDasharray="4,6"/>
             <line x1="0" y1="70%" x2="100%" y2="70%" stroke={t.muted} strokeWidth="1" strokeDasharray="4,6"/>
           </svg>
-          {MAP_PINS.map((p,i)=>(
+          {mapPins.map((p,i)=>(
             <div key={i} style={{position:"absolute",left:`${p.x}%`,top:`${p.y}%`,display:"flex",flexDirection:"column",alignItems:"center",animation:`slideUp .5s ease ${i*.12}s both`,zIndex:2}}>
               <div style={{position:"relative"}}>
                 <div style={{position:"absolute",inset:-4,borderRadius:"50%",background:`${p.col}25`,animation:`ripple 2.8s ease-out ${i*.45}s infinite`}}/>
@@ -1134,7 +1208,12 @@ function Discover({t}:any){
 
         {/* Task list */}
         <div style={{display:"flex",flexDirection:"column",gap:10,overflowY:"auto",maxHeight:320,paddingRight:2}}>
-          {tasks.length===0?(
+          {loading?(
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:200,gap:12,color:t.muted}}>
+              <I n="clock" s={28} c={t.muted}/>
+              <span style={{fontSize:13,fontWeight:600}}>Loading tasks...</span>
+            </div>
+          ):tasks.length===0?(
             <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:200,gap:12,color:t.muted}}>
               <I n="search" s={28} c={t.muted}/>
               <span style={{fontSize:13,fontWeight:600}}>No tasks match your search</span>
@@ -1163,7 +1242,7 @@ function Discover({t}:any){
               </div>
               {sel===task.id&&(
                 <button className="press" style={{marginTop:10,width:"100%",padding:"8px 0",borderRadius:10,background:`linear-gradient(135deg,${t.primary},${t.accent})`,color:"#fff",border:"none",cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:"Poppins",boxShadow:`0 4px 14px ${t.primary}40`,animation:"fadeIn .2s ease both"}}>
-                  Apply for this Task →
+                  Open in Bidding →
                 </button>
               )}
             </div>
@@ -1177,28 +1256,81 @@ function Discover({t}:any){
 /* ═══════════════════════════════════════════════════════
    BIDDING
 ═══════════════════════════════════════════════════════ */
-const BIDS_DATA=[
-  {id:1,title:"Fix Laptop WiFi",budget:500,loc:"Manjalpur",posted:"30 min ago",desc:"WiFi adapter stopped working after Windows update. Need someone experienced to diagnose and fix. Must bring own tools if needed.",bids:3,poster:"Raj Patel",posterRating:4.8,cat:"Tech"},
-  {id:2,title:"Math Tutor for Class 10",budget:700,loc:"Alkapuri",posted:"1 hr ago",desc:"Need a math tutor for my son who is preparing for board exams. Focus on algebra, geometry, and statistics. 2 sessions per week, 1.5 hrs each.",bids:5,poster:"Priya Sharma",posterRating:4.9,cat:"Tutoring"},
-  {id:3,title:"Home Plumbing Fix",budget:800,loc:"Gotri",posted:"2 hr ago",desc:"Kitchen sink has been leaking for 3 days. Need an experienced plumber to fix it permanently. All materials will be provided.",bids:2,poster:"Amit Kumar",posterRating:4.6,cat:"Repair"},
-  {id:4,title:"Evening Dog Walk",budget:300,loc:"Sama",posted:"3 hr ago",desc:"Daily 30-minute walk for my friendly Labrador. 6–7 PM preferred. Dog is vaccinated and leash-trained.",bids:1,poster:"Nisha Tiwari",posterRating:5.0,cat:"Pet Care"},
-];
-
-function Bidding({t}:any){
+function Bidding({t,currentUser,setPage}:any){
   const [exp,setExp]=useState(null);
-  const [amounts,setAmounts]=useState({});
-  const [placed,setPlaced]=useState(new Set());
-  const [note,setNote]=useState({});
+  const [amounts,setAmounts]=useState<any>({});
+  const [note,setNote]=useState<any>({});
+  const [tasks,setTasks]=useState<any[]>([]);
+  const [myBids,setMyBids]=useState<any>({});
+  const [loading,setLoading]=useState(true);
+
+  useEffect(()=>{
+    if(!firestore || !currentUser?.uid){ setLoading(false); return; }
+    const unsubTasks = onSnapshot(query(collection(firestore, "tasks"), orderBy("createdAt","desc")), snap=>{
+      const rows = snap.docs
+        .map(d=>({id:d.id,...d.data()}))
+        .filter((x:any)=>x.status!=="closed" && x.posterId!==currentUser.uid);
+      setTasks(rows);
+      setLoading(false);
+    });
+    const unsubBids = onSnapshot(query(collection(firestore, "bids"), where("helperId", "==", currentUser.uid)), snap=>{
+      const next:any = {};
+      snap.docs.forEach(d=>{ const r:any=d.data(); next[r.taskId]=r; });
+      setMyBids(next);
+    });
+    return ()=>{unsubTasks();unsubBids();};
+  },[currentUser?.uid]);
+
+  const placeBid = async (task:any) => {
+    if(!firestore || !currentUser?.uid) return;
+    const value = Number(amounts[task.id] || task.budget || 0);
+    await setDoc(doc(firestore, "bids", `${task.id}_${currentUser.uid}`), {
+      taskId: task.id,
+      helperId: currentUser.uid,
+      helperName: currentUser.name || "Helper",
+      posterId: task.posterId,
+      amount: value,
+      note: note[task.id] || "",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      status: "pending",
+    }, { merge: true });
+
+    const convId = convIdForTask(task.id, currentUser.uid, task.posterId);
+    const participants = [currentUser.uid, task.posterId];
+    await setDoc(doc(firestore, "conversations", convId), {
+      taskId: task.id,
+      taskTitle: task.title,
+      participants,
+      participantNames: {
+        [currentUser.uid]: currentUser.name || "Helper",
+        [task.posterId]: task.posterName || "User",
+      },
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      lastMessage: `Bid placed for ₹${value}`,
+      lastMessageAt: serverTimestamp(),
+    }, { merge: true });
+    await addDoc(collection(firestore, "conversations", convId, "messages"), {
+      senderId: currentUser.uid,
+      senderName: currentUser.name || "Helper",
+      text: `Hi! I placed a bid for ₹${value} on "${task.title}".`,
+      createdAt: serverTimestamp(),
+    });
+  };
 
   return(
     <div className="su" style={{padding:"20px 0",maxWidth:720}}>
       <div style={{marginBottom:24}}>
         <h2 style={{fontFamily:"Poppins",fontSize:28,fontWeight:800,color:t.text,letterSpacing:"-0.5px"}}>Task Bidding</h2>
-        <p style={{color:t.sub,marginTop:5,fontSize:14}}>{BIDS_DATA.length - placed.size} active tasks accepting bids</p>
+        <p style={{color:t.sub,marginTop:5,fontSize:14}}>
+          {loading ? "Loading tasks..." : `${tasks.filter((task:any)=>!myBids[task.id]).length} active tasks accepting bids`}
+        </p>
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:13}}>
-        {BIDS_DATA.map((task,i)=>{
-          const open=exp===task.id,done=placed.has(task.id);
+        {tasks.map((task:any,i:number)=>{
+          const open=exp===task.id,done=!!myBids[task.id];
+          const bidInfo = myBids[task.id];
           return(
             <GCard key={task.id} t={t} className={`su${i}`} style={{overflow:"hidden",border:`1.5px solid ${open?t.primary+"50":t.border}`,transition:"border-color .2s"}}>
               <button onClick={()=>setExp(open?null:task.id)}
@@ -1206,10 +1338,10 @@ function Bidding({t}:any){
                 <div style={{textAlign:"left",flex:1}}>
                   <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
                     <span style={{fontSize:15,fontWeight:700,color:t.text}}>{task.title}</span>
-                    <span style={{fontSize:9,fontWeight:800,color:t.primary,background:`${t.primary}15`,padding:"2px 8px",borderRadius:99}}>{task.cat}</span>
+                    <span style={{fontSize:9,fontWeight:800,color:t.primary,background:`${t.primary}15`,padding:"2px 8px",borderRadius:99}}>{task.category}</span>
                   </div>
                   <div style={{display:"flex",gap:14,flexWrap:"wrap"}}>
-                    {[{n:"pin",v:task.loc},{n:"clock",v:task.posted},{n:"tag",v:`${task.bids} bids`},{n:"user",v:task.poster}].map(x=>(
+                    {[{n:"pin",v:task.location},{n:"clock",v:fmtRelative(task.createdAt)},{n:"tag",v:done?"Bid placed":"Open for bids"},{n:"user",v:task.posterName || "User"}].map(x=>(
                       <span key={x.v} style={{fontSize:12,color:t.muted,display:"flex",alignItems:"center",gap:4}}><I n={x.n} s={11}/>{x.v}</span>
                     ))}
                   </div>
@@ -1227,24 +1359,28 @@ function Bidding({t}:any){
               {open&&(
                 <div style={{padding:"0 22px 22px",borderTop:`1px solid ${t.border}`,paddingTop:18,animation:"slideUp .22s ease both"}}>
                   <div style={{padding:"12px 16px",borderRadius:12,background:t.secondary,border:`1px solid ${t.border}`,marginBottom:14}}>
-                    <p style={{fontSize:13,color:t.sub,lineHeight:1.7}}>{task.desc}</p>
+                    <p style={{fontSize:13,color:t.sub,lineHeight:1.7}}>{task.description}</p>
                   </div>
                   <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16,padding:"8px 14px",borderRadius:10,background:`${t.primary}10`,border:`1px solid ${t.primary}20`}}>
                     <div style={{width:28,height:28,borderRadius:"50%",background:`linear-gradient(135deg,${t.primary},${t.accent})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,color:"#fff",flexShrink:0}}>
-                      {task.poster[0]}
+                      {(task.posterName||"U")[0]}
                     </div>
                     <div>
-                      <span style={{fontSize:12,fontWeight:700,color:t.text}}>{task.poster}</span>
-                      <span style={{fontSize:11,color:t.muted,marginLeft:8}}>★ {task.posterRating} rating</span>
+                      <span style={{fontSize:12,fontWeight:700,color:t.text}}>{task.posterName || "User"}</span>
+                      <span style={{fontSize:11,color:t.muted,marginLeft:8}}>Poster</span>
                     </div>
                   </div>
                   {done?(
                     <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 18px",borderRadius:12,background:`${t.accent}15`,border:`1px solid ${t.accent}30`}}>
                       <I n="checkC" s={18} c={t.accent}/>
                       <div>
-                        <div style={{fontSize:13,fontWeight:700,color:t.accent}}>Bid placed: ₹{amounts[task.id]||task.budget}</div>
-                        <div style={{fontSize:11,color:t.muted}}>Waiting for {task.poster} to accept</div>
+                        <div style={{fontSize:13,fontWeight:700,color:t.accent}}>Bid placed: ₹{bidInfo?.amount||task.budget}</div>
+                        <div style={{fontSize:11,color:t.muted}}>You can now chat with {task.posterName || "user"}</div>
                       </div>
+                      <button className="press" onClick={()=>setPage("chat")}
+                        style={{marginLeft:"auto",padding:"8px 10px",borderRadius:10,background:t.secondary,border:`1px solid ${t.border}`,cursor:"pointer",color:t.text,fontSize:11,fontWeight:700}}>
+                        Open Chat
+                      </button>
                     </div>
                   ):(
                     <div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -1255,7 +1391,7 @@ function Bidding({t}:any){
                             onChange={e=>setAmounts(p=>({...p,[task.id]:e.target.value}))}
                             style={{width:"100%",padding:"11px 14px 11px 30px",borderRadius:12,background:t.input,border:`1.5px solid ${t.border}`,color:t.text,fontSize:14,outline:"none",backdropFilter:"blur(8px)"}}/>
                         </div>
-                        <button className="press" onClick={()=>setPlaced(p=>new Set([...p,task.id]))}
+                        <button className="press" onClick={()=>placeBid(task)}
                           style={{padding:"11px 22px",borderRadius:12,background:`linear-gradient(135deg,${t.primary},${t.accent})`,color:"#fff",border:"none",cursor:"pointer",fontFamily:"Poppins",fontWeight:700,fontSize:14,flexShrink:0,boxShadow:`0 4px 16px ${t.primary}40`}}>
                           Place Bid
                         </button>
@@ -1277,30 +1413,56 @@ function Bidding({t}:any){
 /* ═══════════════════════════════════════════════════════
    CHAT
 ═══════════════════════════════════════════════════════ */
-const CONVOS_DATA=[
-  {id:0,name:"Raj Patel",last:"I can come by today afternoon.",time:"10:32 AM",unread:2,online:true,avatar:"R",role:"Helper"},
-  {id:1,name:"Priya Sharma",last:"Thanks for the tutoring session!",time:"9:15 AM",unread:0,online:false,avatar:"P",role:"Helper"},
-  {id:2,name:"Amit Kumar",last:"Is the plumbing work done?",time:"Yesterday",unread:1,online:false,avatar:"A",role:"User"},
-];
-const MSGS_INIT=[
-  {id:1,from:"them",text:"Hello! I saw your task posting for the laptop repair.",time:"10:30 AM"},
-  {id:2,from:"me",text:"Hi! Yes, my laptop WiFi isn't working after an update. Can you fix it?",time:"10:31 AM"},
-  {id:3,from:"them",text:"Absolutely, I specialise in hardware and driver issues. I have my tools ready.",time:"10:32 AM"},
-  {id:4,from:"me",text:"Great! What time works for you today?",time:"10:33 AM"},
-  {id:5,from:"them",text:"I can come by today afternoon around 3 PM. Does that work?",time:"10:34 AM"},
-];
-
-function Chat({t}:any){
-  const [msgs,setMsgs]=useState(MSGS_INIT);
+function Chat({t,currentUser}:any){
+  const [convos,setConvos]=useState<any[]>([]);
+  const [msgs,setMsgs]=useState<any[]>([]);
   const [inp,setInp]=useState("");
   const [active,setActive]=useState(0);
   const endRef=useRef(null);
+  const activeConvo = convos[active];
+  const myId = currentUser?.uid;
   useEffect(()=>endRef.current?.scrollIntoView({behavior:"smooth"}),[msgs,active]);
 
-  const send=()=>{
-    if(!inp.trim())return;
-    const now=new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
-    setMsgs(p=>[...p,{id:p.length+1,from:"me",text:inp.trim(),time:now}]);
+  useEffect(()=>{
+    if(!firestore || !myId) return;
+    const qConvos = query(collection(firestore, "conversations"), where("participants", "array-contains", myId));
+    const unsub = onSnapshot(qConvos, snap=>{
+      const list = snap.docs
+        .map(d=>({id:d.id,...d.data()}))
+        .sort((a:any,b:any)=>{
+          const aT = a.lastMessageAt?.toDate?.()?.getTime?.() || 0;
+          const bT = b.lastMessageAt?.toDate?.()?.getTime?.() || 0;
+          return bT-aT;
+        });
+      setConvos(list);
+      setActive(prev=>Math.min(prev, Math.max(0, list.length-1)));
+    });
+    return ()=>unsub();
+  },[myId]);
+
+  useEffect(()=>{
+    if(!firestore || !activeConvo?.id) { setMsgs([]); return; }
+    const qMsgs = query(collection(firestore, "conversations", activeConvo.id, "messages"), orderBy("createdAt", "asc"));
+    const unsub = onSnapshot(qMsgs, snap=>{
+      setMsgs(snap.docs.map(d=>({id:d.id,...d.data()})));
+    });
+    return ()=>unsub();
+  },[activeConvo?.id]);
+
+  const send=async()=>{
+    if(!inp.trim() || !firestore || !activeConvo?.id || !myId) return;
+    const text = inp.trim();
+    await addDoc(collection(firestore, "conversations", activeConvo.id, "messages"), {
+      senderId: myId,
+      senderName: currentUser?.name || "User",
+      text,
+      createdAt: serverTimestamp(),
+    });
+    await setDoc(doc(firestore, "conversations", activeConvo.id), {
+      updatedAt: serverTimestamp(),
+      lastMessage: text,
+      lastMessageAt: serverTimestamp(),
+    }, { merge: true });
     setInp("");
   };
 
@@ -1315,40 +1477,50 @@ function Chat({t}:any){
         <GCard t={t} style={{display:"flex",flexDirection:"column",overflow:"hidden",padding:0}}>
           <div style={{padding:"14px 18px",borderBottom:`1px solid ${t.border}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <span style={{fontSize:13,fontWeight:800,color:t.text,fontFamily:"Poppins"}}>Conversations</span>
-            <span style={{width:20,height:20,borderRadius:"50%",background:`linear-gradient(135deg,${t.primary},${t.accent})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,color:"#fff"}}>3</span>
+            <span style={{width:20,height:20,borderRadius:"50%",background:`linear-gradient(135deg,${t.primary},${t.accent})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,color:"#fff"}}>{convos.length}</span>
           </div>
-          {CONVOS_DATA.map((c,i)=>(
+          {convos.map((c:any,i:number)=>{
+            const otherId = (c.participants || []).find((p:string)=>p!==myId);
+            const name = c?.participantNames?.[otherId] || "User";
+            const avatar = name[0]?.toUpperCase?.() || "U";
+            return(
             <button key={c.id} onClick={()=>setActive(i)}
               style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"12px 16px",background:active===i?`${t.primary}12`:"none",borderLeft:`2.5px solid ${active===i?t.primary:"transparent"}`,border:"none",borderBottom:`1px solid ${t.border}`,cursor:"pointer",textAlign:"left",transition:"all .15s"}}>
               <div style={{position:"relative",flexShrink:0}}>
-                <div style={{width:38,height:38,borderRadius:"50%",background:`linear-gradient(135deg,${t.primary}80,${t.accent}80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,color:"#fff"}}>{c.avatar}</div>
-                {c.online&&<div style={{position:"absolute",bottom:1,right:1,width:10,height:10,borderRadius:"50%",background:t.accent,border:`2px solid ${t.card}`,boxShadow:`0 0 6px ${t.accent}`}}/>}
+                <div style={{width:38,height:38,borderRadius:"50%",background:`linear-gradient(135deg,${t.primary}80,${t.accent}80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,color:"#fff"}}>{avatar}</div>
               </div>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <span style={{fontSize:13,fontWeight:700,color:t.text}}>{c.name}</span>
-                  <span style={{fontSize:10,color:t.muted}}>{c.time}</span>
+                  <span style={{fontSize:13,fontWeight:700,color:t.text}}>{name}</span>
+                  <span style={{fontSize:10,color:t.muted}}>{fmtRelative(c.lastMessageAt)}</span>
                 </div>
-                <p style={{fontSize:11,color:t.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginTop:2}}>{c.last}</p>
+                <p style={{fontSize:11,color:t.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginTop:2}}>{c.lastMessage || "Start chatting..."}</p>
               </div>
-              {c.unread>0&&<span style={{width:20,height:20,borderRadius:"50%",background:`linear-gradient(135deg,${t.primary},${t.accent})`,color:"#fff",fontSize:10,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:`0 0 8px ${t.primary}50`}}>{c.unread}</span>}
             </button>
-          ))}
+          )})}
         </GCard>
 
         {/* Chat panel */}
         <GCard t={t} style={{display:"flex",flexDirection:"column",overflow:"hidden",padding:0}}>
+          {!activeConvo ? (
+            <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:t.muted,fontSize:14,fontWeight:600}}>
+              No conversations yet. Place a bid to start chatting.
+            </div>
+          ) : (
+          <>
           {/* Header */}
           <div style={{padding:"14px 20px",borderBottom:`1px solid ${t.border}`,display:"flex",alignItems:"center",gap:14}}>
             <div style={{position:"relative"}}>
-              <div style={{width:38,height:38,borderRadius:"50%",background:`linear-gradient(135deg,${t.primary}80,${t.accent}80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800,color:"#fff"}}>{CONVOS_DATA[active].avatar}</div>
-              {CONVOS_DATA[active].online&&<div style={{position:"absolute",bottom:1,right:1,width:9,height:9,borderRadius:"50%",background:t.accent,border:`2px solid ${t.card}`}}/>}
+              <div style={{width:38,height:38,borderRadius:"50%",background:`linear-gradient(135deg,${t.primary}80,${t.accent}80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800,color:"#fff"}}>
+                {(activeConvo?.participantNames?.[(activeConvo?.participants||[]).find((p:string)=>p!==myId)] || "U")[0]}
+              </div>
             </div>
             <div style={{flex:1}}>
-              <div style={{fontSize:15,fontWeight:800,color:t.text,fontFamily:"Poppins"}}>{CONVOS_DATA[active].name}</div>
-              <div style={{fontSize:11,fontWeight:600,color:CONVOS_DATA[active].online?t.accent:t.muted,display:"flex",alignItems:"center",gap:4}}>
-                {CONVOS_DATA[active].online?<><div style={{width:6,height:6,borderRadius:"50%",background:t.accent}}/>Online</>:"Offline"}
-                <span style={{marginLeft:8,color:t.muted}}>· {CONVOS_DATA[active].role}</span>
+              <div style={{fontSize:15,fontWeight:800,color:t.text,fontFamily:"Poppins"}}>
+                {activeConvo?.participantNames?.[(activeConvo?.participants||[]).find((p:string)=>p!==myId)] || "User"}
+              </div>
+              <div style={{fontSize:11,fontWeight:600,color:t.muted,display:"flex",alignItems:"center",gap:4}}>
+                <span>{activeConvo?.taskTitle || "Task chat"}</span>
               </div>
             </div>
             <button style={{width:34,height:34,borderRadius:10,background:t.secondary,border:`1px solid ${t.border}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:t.muted}}>
@@ -1357,14 +1529,17 @@ function Chat({t}:any){
           </div>
           {/* Messages */}
           <div style={{flex:1,overflowY:"auto",padding:"16px 20px",display:"flex",flexDirection:"column",gap:12}}>
-            {msgs.map((m,i)=>(
-              <div key={m.id} style={{display:"flex",justifyContent:m.from==="me"?"flex-end":"flex-start",animation:`slideUp .22s ease ${i*.02}s both`}}>
-                <div style={{maxWidth:"74%",padding:"11px 16px",borderRadius:m.from==="me"?"18px 18px 4px 18px":"18px 18px 18px 4px",background:m.from==="me"?`linear-gradient(135deg,${t.primary},${t.primary}cc)`:t.secondary,color:m.from==="me"?"#fff":t.text,boxShadow:m.from==="me"?`0 4px 14px ${t.primary}40`:t.shadow}}>
+            {msgs.map((m:any,i:number)=>{
+              const mine = m.senderId===myId;
+              const time = m.createdAt?.toDate ? m.createdAt.toDate().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}) : "";
+              return(
+              <div key={m.id} style={{display:"flex",justifyContent:mine?"flex-end":"flex-start",animation:`slideUp .22s ease ${i*.02}s both`}}>
+                <div style={{maxWidth:"74%",padding:"11px 16px",borderRadius:mine?"18px 18px 4px 18px":"18px 18px 18px 4px",background:mine?`linear-gradient(135deg,${t.primary},${t.primary}cc)`:t.secondary,color:mine?"#fff":t.text,boxShadow:mine?`0 4px 14px ${t.primary}40`:t.shadow}}>
                   <p style={{fontSize:13,lineHeight:1.55}}>{m.text}</p>
-                  <p style={{fontSize:10,marginTop:4,opacity:.65,textAlign:m.from==="me"?"right":"left"}}>{m.time}</p>
+                  <p style={{fontSize:10,marginTop:4,opacity:.65,textAlign:mine?"right":"left"}}>{time}</p>
                 </div>
               </div>
-            ))}
+            )})}
             <div ref={endRef}/>
           </div>
           {/* Input */}
@@ -1380,6 +1555,8 @@ function Chat({t}:any){
               <I n="send" s={14} c="#fff"/>
             </button>
           </div>
+          </>
+          )}
         </GCard>
       </div>
     </div>
@@ -1610,10 +1787,10 @@ export default function App(){
         <div style={{padding:loggedIn?"0 24px":0}}>
           {page==="login"    &&<LoginPage onLogin={login} t={t} isDark={dark} toggleTheme={()=>setDark(v=>!v)}/>}
           {page==="dashboard"&&<Dashboard t={t} user={userForUI} setPage={setPage}/>}
-          {page==="post-task"&&<PostTask t={t} setPage={setPage}/>}
-          {page==="discover" &&<Discover t={t}/>}
-          {page==="bidding"  &&<Bidding t={t}/>}
-          {page==="chat"     &&<Chat t={t}/>}
+          {page==="post-task"&&<PostTask t={t} setPage={setPage} currentUser={{uid: authUser?.uid, ...userForUI}}/>}
+          {page==="discover" &&<Discover t={t} currentUser={{uid: authUser?.uid, ...userForUI}}/>}
+          {page==="bidding"  &&<Bidding t={t} currentUser={{uid: authUser?.uid, ...userForUI}} setPage={setPage}/>}
+          {page==="chat"     &&<Chat t={t} currentUser={{uid: authUser?.uid, ...userForUI}}/>}
           {page==="profile"  &&<Profile t={t} user={userForUI} online={online} setOnline={setOnline}/>}
         </div>
       </main>
