@@ -15,8 +15,8 @@ export default function RatingDialog({ open, helperName, submitting, onClose, on
   if (!open) return null;
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
-      <div style={{ width: "min(94vw, 460px)", background: "#fff", color: "#111", borderRadius: 16, padding: 18 }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, backdropFilter: "none", WebkitBackdropFilter: "none" }}>
+      <div style={{ width: "min(94vw, 460px)", background: "#fff", color: "#111", borderRadius: 16, padding: 18, backdropFilter: "none", WebkitBackdropFilter: "none" }}>
         <h3 style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>Rate {helperName}</h3>
         <p style={{ fontSize: 13, color: "#555", marginBottom: 14 }}>Your review helps build trust in the community.</p>
 

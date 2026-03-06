@@ -1,11 +1,14 @@
 import {
+  deleteDoc,
   collection,
   doc,
+  getDoc,
   getDocs,
   orderBy,
   query,
   runTransaction,
   serverTimestamp,
+  updateDoc,
   where,
 } from "firebase/firestore";
 
@@ -27,6 +30,7 @@ export async function submitRating(input: SubmitRatingInput): Promise<void> {
   }
 
   const ratingId = `${input.taskId}_${input.fromUserId}_${input.toUserId}`;
+  const reciprocalRatingId = `${input.taskId}_${input.toUserId}_${input.fromUserId}`;
   await runTransaction(firestore, async (tx) => {
     const ratingRef = doc(firestore, "ratings", ratingId);
     const profileRef = doc(firestore, "profiles", input.toUserId);
@@ -36,6 +40,14 @@ export async function submitRating(input: SubmitRatingInput): Promise<void> {
       throw new Error("Rating already submitted for this task and user pair");
     }
 
+    // Firestore transactions require all reads before writes.
+    const profileSnap = await tx.get(profileRef);
+    const profileData = profileSnap.exists() ? profileSnap.data() : {};
+    const currentStats = profileData?.stats ?? { completedCount: 0, ratingAvg: 0, ratingCount: 0 };
+    const nextCount = Number(currentStats.ratingCount || 0) + 1;
+    const currentAvg = Number(currentStats.ratingAvg || 0);
+    const nextAvg = (currentAvg * (nextCount - 1) + input.stars) / nextCount;
+
     tx.set(ratingRef, {
       taskId: input.taskId,
       fromUserId: input.fromUserId,
@@ -44,13 +56,6 @@ export async function submitRating(input: SubmitRatingInput): Promise<void> {
       review: input.review,
       createdAt: serverTimestamp(),
     });
-
-    const profileSnap = await tx.get(profileRef);
-    const profileData = profileSnap.exists() ? profileSnap.data() : {};
-    const currentStats = profileData?.stats ?? { completedCount: 0, ratingAvg: 0, ratingCount: 0 };
-    const nextCount = Number(currentStats.ratingCount || 0) + 1;
-    const currentAvg = Number(currentStats.ratingAvg || 0);
-    const nextAvg = (currentAvg * (nextCount - 1) + input.stars) / nextCount;
 
     tx.set(
       profileRef,
@@ -71,6 +76,45 @@ export async function submitRating(input: SubmitRatingInput): Promise<void> {
     body: `You received ${input.stars} star${input.stars > 1 ? "s" : ""}.`,
     ref: { taskId: input.taskId },
   });
+
+  const reciprocalRef = doc(firestore, "ratings", reciprocalRatingId);
+  const reciprocalSnap = await getDoc(reciprocalRef);
+  if (reciprocalSnap.exists()) {
+    await cleanupTaskSessionAfterMutualRatings(input.taskId);
+  }
+}
+
+async function cleanupTaskSessionAfterMutualRatings(taskId: string): Promise<void> {
+  if (!firestore) return;
+
+  const conversationSnap = await getDocs(query(collection(firestore, "conversations"), where("taskId", "==", taskId)));
+
+  // Stage a visible closing state first so both participants see why chat disappears.
+  await Promise.all(
+    conversationSnap.docs.map((conversationDoc) =>
+      updateDoc(conversationDoc.ref, {
+        sessionStatus: "closing",
+        sessionCloseReason: "mutual_ratings",
+        lastMessage: "Session closed after mutual ratings",
+        lastMessageAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }).catch(() => undefined),
+    ),
+  );
+
+  // Give clients a short window to render the closing label before deletion.
+  await new Promise((resolve) => setTimeout(resolve, 3000));
+
+  await Promise.all(
+    conversationSnap.docs.map(async (conversationDoc) => {
+      const messagesSnap = await getDocs(collection(firestore, "conversations", conversationDoc.id, "messages"));
+      await Promise.all(messagesSnap.docs.map((msg) => deleteDoc(msg.ref).catch(() => undefined)));
+      await deleteDoc(conversationDoc.ref).catch(() => undefined);
+    }),
+  );
+
+  const notificationSnap = await getDocs(query(collection(firestore, "notifications"), where("ref.taskId", "==", taskId)));
+  await Promise.all(notificationSnap.docs.map((row) => deleteDoc(row.ref).catch(() => undefined)));
 }
 
 export async function getRatingsForHelper(helperId: string): Promise<Array<RatingDoc & { id: string }>> {

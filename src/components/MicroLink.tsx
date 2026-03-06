@@ -1202,14 +1202,18 @@ function Dashboard({t,user,setPage,postedTasks,currentUid,focusTab,onFocusTabHan
         taskId: paymentTask.id,
         posterId: currentUid,
         helperId: paymentTask.acceptedBy,
-        currentStatus: paymentTask.status,
         taskTitle: paymentTask.title,
         method: paymentMethod,
       });
       setPaymentTask(null);
       setDashboardTab("orders");
     } catch (e:any) {
-      setDashError(e?.message || "Payment could not be processed");
+      const raw = String(e?.message || "");
+      if (/permission|insufficient/i.test(raw)) {
+        setDashError("Payment blocked by backend rules. Please wait a few seconds after accepting bid, then retry.");
+      } else {
+        setDashError(e?.message || "Payment could not be processed");
+      }
     }
     setPaymentBusy(false);
   };
@@ -1602,6 +1606,7 @@ function PostTask({t,setPage,currentUser}:any){
   const [helpers,setHelpers]=useState<any[]>([]);
   const [helpersLoading,setHelpersLoading]=useState(true);
   const [geoBusy,setGeoBusy]=useState(false);
+  const [showLocationPreview,setShowLocationPreview]=useState(false);
 
   useEffect(()=>{
     let mounted = true;
@@ -1668,25 +1673,72 @@ function PostTask({t,setPage,currentUser}:any){
       return;
     }
 
+    if (!window.isSecureContext) {
+      setError("Location access requires HTTPS or localhost. Open this app in a secure URL.");
+      return;
+    }
+
     setGeoBusy(true);
     setError("");
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const next = {
-          lat: Number(pos.coords.latitude.toFixed(6)),
-          lng: Number(pos.coords.longitude.toFixed(6)),
-        };
-        setTaskCoords(next);
-        setLocation((prev)=>prev.trim() ? prev : `${next.lat}, ${next.lng}`);
-        setGeoBusy(false);
-      },
-      () => {
-        setError("Could not read your location. Please allow GPS permission.");
-        setGeoBusy(false);
-      },
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
+
+    const readPosition = () => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const next = {
+            lat: Number(pos.coords.latitude.toFixed(6)),
+            lng: Number(pos.coords.longitude.toFixed(6)),
+          };
+          setTaskCoords(next);
+          setLocation((prev)=>prev.trim() ? prev : `${next.lat}, ${next.lng}`);
+          setShowLocationPreview(true);
+          setGeoBusy(false);
+        },
+        (geoErr) => {
+          if (geoErr?.code === 1) {
+            setError("Location permission denied. Enable location for this site in browser settings and retry.");
+          } else if (geoErr?.code === 2) {
+            setError("Location is unavailable right now. Check GPS/network and try again.");
+          } else if (geoErr?.code === 3) {
+            setError("Location request timed out. Try again in an open area or with better network.");
+          } else {
+            setError("Could not read your location. Please allow GPS permission.");
+          }
+          setGeoBusy(false);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    };
+
+    // Surface actionable state when the browser blocks prompts silently.
+    if (navigator.permissions?.query) {
+      navigator.permissions
+        .query({ name: "geolocation" as PermissionName })
+        .then((status) => {
+          if (status.state === "denied") {
+            setError("Location is blocked for this site. Allow location in browser site settings and retry.");
+            setGeoBusy(false);
+            return;
+          }
+          readPosition();
+        })
+        .catch(() => {
+          readPosition();
+        });
+      return;
+    }
+
+    readPosition();
   };
+
+  const handleConfirmLocation = () => {
+    setShowLocationPreview(false);
+  };
+
+  useEffect(()=>{
+    if (!showLocationPreview) return;
+    const timer = window.setTimeout(()=>setShowLocationPreview(false), 2000);
+    return ()=>window.clearTimeout(timer);
+  },[showLocationPreview]);
 
   const submit=async(e:any)=>{
     e.preventDefault();
@@ -1807,10 +1859,11 @@ function PostTask({t,setPage,currentUser}:any){
               t={t}
               locationLabel={location.trim() || "No address selected"}
               taskCoords={taskCoords}
-              helpers={recommendedHelpers as any[]}
-              loading={helpersLoading}
+              recommendationCount={helpersLoading ? 0 : recommendedHelpers.length}
               geoBusy={geoBusy}
               onUseCurrentLocation={handleUseCurrentLocation}
+              onConfirmLocation={handleConfirmLocation}
+              showPreview={showLocationPreview}
             />
 
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
@@ -2470,6 +2523,9 @@ function Chat({t,currentUser}:any){
                   <span style={{fontSize:10,color:t.muted}}>{fmtRelative(c.lastMessageAt)}</span>
                 </div>
                 <p style={{fontSize:11,color:t.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginTop:2}}>{c.lastMessage || "Start chatting..."}</p>
+                {c.sessionStatus === "closing" && (
+                  <p style={{fontSize:10,color:t.warn,fontWeight:700,marginTop:4}}>Session closed after mutual ratings</p>
+                )}
               </div>
             </button>
           )})}

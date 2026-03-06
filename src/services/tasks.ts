@@ -2,6 +2,7 @@ import {
   addDoc,
   collection,
   doc,
+  getDoc,
   getDocs,
   onSnapshot,
   orderBy,
@@ -248,17 +249,28 @@ export async function markTaskPaid(args: {
   taskId: string;
   posterId: string;
   helperId: string;
-  currentStatus: TaskStatus;
   taskTitle: string;
   method: "upi_qr" | "card" | "netbanking";
 }): Promise<void> {
   assertFirestore();
 
-  if (!["accepted", "in_progress"].includes(args.currentStatus)) {
-    throw new Error("Task is not ready for payment");
+  const taskRef = doc(firestore!, "tasks", args.taskId);
+  const liveTaskSnap = await getDoc(taskRef);
+  const liveTask = liveTaskSnap.data() as TaskDoc | undefined;
+
+  if (!liveTaskSnap.exists() || !liveTask) {
+    throw new Error("Task not found");
   }
 
-  await updateDoc(doc(firestore!, "tasks", args.taskId), {
+  if (!["accepted", "in_progress"].includes(liveTask.status)) {
+    throw new Error("Task is still syncing acceptance. Please retry payment in a few seconds.");
+  }
+
+  if (liveTask.paymentStatus === "paid") {
+    return;
+  }
+
+  await updateDoc(taskRef, {
     paymentStatus: "paid",
     paymentMethod: args.method,
     paymentCompletedAt: serverTimestamp(),

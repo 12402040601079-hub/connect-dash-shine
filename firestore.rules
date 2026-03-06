@@ -78,6 +78,14 @@ service cloud.firestore {
         request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
     }
 
+    function isTaskParticipant(taskId) {
+      return signedIn() &&
+        (
+          get(/databases/$(database)/documents/tasks/$(taskId)).data.posterId == request.auth.uid ||
+          get(/databases/$(database)/documents/tasks/$(taskId)).data.acceptedBy == request.auth.uid
+        );
+    }
+
     match /profiles/{userId} {
       allow read: if signedIn();
       allow create: if signedIn() && request.auth.uid == userId && validProfileRole(request.resource.data.role);
@@ -126,14 +134,15 @@ service cloud.firestore {
         request.resource.data.participants is list &&
         request.resource.data.participants.size() == 2;
       allow update: if signedIn() && request.auth.uid in resource.data.participants;
-      allow delete: if false;
+      allow delete: if signedIn() && request.auth.uid in resource.data.participants;
 
       match /messages/{messageId} {
         allow read: if isParticipant(conversationId);
         allow create: if isParticipant(conversationId) &&
           request.resource.data.senderId == request.auth.uid &&
           request.resource.data.text is string;
-        allow update, delete: if false;
+        allow update: if false;
+        allow delete: if isParticipant(conversationId);
       }
     }
 
@@ -161,7 +170,14 @@ service cloud.firestore {
       allow read: if signedIn() && resource.data.userId == request.auth.uid;
       allow create: if signedIn();
       allow update: if signedIn() && resource.data.userId == request.auth.uid;
-      allow delete: if false;
+      allow delete: if signedIn() &&
+        (
+          resource.data.userId == request.auth.uid ||
+          (
+            resource.data.ref.taskId is string &&
+            isTaskParticipant(resource.data.ref.taskId)
+          )
+        );
     }
 
     match /reports/{reportId} {
