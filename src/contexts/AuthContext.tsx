@@ -1,38 +1,56 @@
-import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { Session, User } from "@supabase/supabase-js";
+import {
+  ReactNode,
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import {
+  User,
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  signInWithRedirect,
+  signOut as firebaseSignOut,
+  updateProfile,
+  GoogleAuthProvider,
+  OAuthProvider,
+} from "firebase/auth";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import {
+  firebaseAuth,
+  firestore,
+  hasFirebaseConfig,
+  firebaseConfigError,
+} from "@/integrations/firebase/client";
 
-interface Profile {
-  id: string;
-  user_id: string;
+type Profile = {
   name: string;
   email: string;
   phone: string;
-  age: number | null;
-  gender: string | null;
+  age: string;
+  gender: string;
   address: string;
   bio: string;
-  role: string;
   interests: string[];
-  rating: number;
-  review_count: number;
-  is_online: boolean;
-  avatar_url: string | null;
-  created_at: string;
-  updated_at: string;
-}
+  role: string;
+  joinedDate: string;
+  joinedFull: string;
+};
 
-interface AuthContextType {
-  session: Session | null;
+type AuthContextType = {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
-  signUp: (email: string, password: string, metadata?: any) => Promise<{ error: any }>;
-  signIn: (email: string, password: string) => Promise<{ error: any }>;
+  configError: string | null;
+  signUp: (email: string, password: string, profileData?: Partial<Profile>) => Promise<{ error: Error | null }>;
+  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signInWithGoogle: () => Promise<{ error: Error | null; redirected?: boolean }>;
+  signInWithApple: () => Promise<{ error: Error | null; redirected?: boolean }>;
   signOut: () => Promise<void>;
-  updateProfile: (data: Partial<Profile>) => Promise<{ error: any }>;
-  refreshProfile: () => Promise<void>;
-}
+};
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
@@ -42,98 +60,165 @@ export function useAuth() {
   return ctx;
 }
 
+const makeDefaultProfile = (user: User | null): Profile | null => {
+  if (!user) return null;
+  return {
+    name: user.displayName || user.email?.split("@")[0] || "User",
+    email: user.email || "",
+    phone: "",
+    age: "",
+    gender: "",
+    address: "",
+    bio: "",
+    interests: [],
+    role: "user",
+    joinedDate: new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }),
+    joinedFull: new Date().toISOString(),
+  };
+};
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchProfile = useCallback(async (userId: string) => {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("user_id", userId)
-      .single();
-    if (data && !error) {
-      setProfile(data as Profile);
-    }
-  }, []);
-
   useEffect(() => {
-    // Set up auth state listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        if (session?.user) {
-          // Use setTimeout to avoid Supabase deadlock
-          setTimeout(() => fetchProfile(session.user.id), 0);
+    if (!firebaseAuth) {
+      setLoading(false);
+      return;
+    }
+
+    const unsub = onAuthStateChanged(firebaseAuth, async (nextUser) => {
+      setUser(nextUser);
+      if (!nextUser) {
+        setProfile(null);
+        setLoading(false);
+        return;
+      }
+
+      if (!firestore) {
+        setProfile(makeDefaultProfile(nextUser));
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const profileRef = doc(firestore, "profiles", nextUser.uid);
+        const snap = await getDoc(profileRef);
+        if (snap.exists()) {
+          setProfile(snap.data() as Profile);
         } else {
-          setProfile(null);
+          const fallback = makeDefaultProfile(nextUser);
+          setProfile(fallback);
+          if (fallback) {
+            await setDoc(profileRef, fallback, { merge: true });
+          }
         }
+      } catch {
+        setProfile(makeDefaultProfile(nextUser));
+      } finally {
         setLoading(false);
       }
-    );
+    });
 
-    // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
+    return () => unsub();
+  }, []);
+
+  const signUp: AuthContextType["signUp"] = async (email, password, profileData) => {
+    if (!firebaseAuth) {
+      return { error: new Error(firebaseConfigError || "Firebase is not configured") };
+    }
+    try {
+      const cred = await createUserWithEmailAndPassword(firebaseAuth, email, password);
+      if (profileData?.name) {
+        await updateProfile(cred.user, { displayName: profileData.name });
       }
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
-  }, [fetchProfile]);
-
-  const signUp = async (email: string, password: string, metadata?: any) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: metadata,
-        emailRedirectTo: window.location.origin,
-      },
-    });
-    return { error };
+      const mergedProfile: Profile = {
+        ...makeDefaultProfile(cred.user)!,
+        ...profileData,
+        email: email.toLowerCase(),
+      };
+      if (firestore) {
+        await setDoc(doc(firestore, "profiles", cred.user.uid), mergedProfile, { merge: true });
+      }
+      setProfile(mergedProfile);
+      return { error: null };
+    } catch (err) {
+      return { error: err as Error };
+    }
   };
 
-  const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error };
+  const signIn: AuthContextType["signIn"] = async (email, password) => {
+    if (!firebaseAuth) {
+      return { error: new Error(firebaseConfigError || "Firebase is not configured") };
+    }
+    try {
+      await signInWithEmailAndPassword(firebaseAuth, email, password);
+      return { error: null };
+    } catch (err) {
+      return { error: err as Error };
+    }
+  };
+
+  const signInWithGoogle: AuthContextType["signInWithGoogle"] = async () => {
+    if (!firebaseAuth) {
+      return { error: new Error(firebaseConfigError || "Firebase is not configured") };
+    }
+    try {
+      await signInWithPopup(firebaseAuth, new GoogleAuthProvider());
+      return { error: null };
+    } catch (err) {
+      const error = err as { code?: string; message?: string };
+      if (
+        error.code === "auth/popup-blocked" ||
+        error.code === "auth/operation-not-supported-in-this-environment"
+      ) {
+        await signInWithRedirect(firebaseAuth, new GoogleAuthProvider());
+        return { error: null, redirected: true };
+      }
+      return { error: new Error(error.message || "Google sign-in failed") };
+    }
+  };
+
+  const signInWithApple: AuthContextType["signInWithApple"] = async () => {
+    if (!firebaseAuth) {
+      return { error: new Error(firebaseConfigError || "Firebase is not configured") };
+    }
+    try {
+      await signInWithPopup(firebaseAuth, new OAuthProvider("apple.com"));
+      return { error: null };
+    } catch (err) {
+      const error = err as { code?: string; message?: string };
+      if (
+        error.code === "auth/popup-blocked" ||
+        error.code === "auth/operation-not-supported-in-this-environment"
+      ) {
+        await signInWithRedirect(firebaseAuth, new OAuthProvider("apple.com"));
+        return { error: null, redirected: true };
+      }
+      return { error: new Error(error.message || "Apple sign-in failed") };
+    }
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    setProfile(null);
+    if (!firebaseAuth) return;
+    await firebaseSignOut(firebaseAuth);
   };
 
-  const updateProfile = async (data: Partial<Profile>) => {
-    if (!user) return { error: new Error("Not authenticated") };
-    // Strip server-managed fields to prevent self-manipulation
-    const { rating, review_count, ...safeData } = data as any;
-    const { error } = await supabase
-      .from("profiles")
-      .update(safeData)
-      .eq("user_id", user.id);
-    if (!error) {
-      await fetchProfile(user.id);
-    }
-    return { error };
-  };
-
-  const refreshProfile = async () => {
-    if (user) await fetchProfile(user.id);
-  };
-
-  return (
-    <AuthContext.Provider value={{
-      session, user, profile, loading,
-      signUp, signIn, signOut, updateProfile, refreshProfile,
-    }}>
-      {children}
-    </AuthContext.Provider>
+  const value = useMemo(
+    () => ({
+      user,
+      profile,
+      loading,
+      configError: hasFirebaseConfig ? null : firebaseConfigError,
+      signUp,
+      signIn,
+      signInWithGoogle,
+      signInWithApple,
+      signOut,
+    }),
+    [user, profile, loading]
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
