@@ -9,6 +9,7 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
+    "seed:firestore": "node scripts/seed-firestore.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -48,6 +49,7 @@
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.6.0",
     "firebase": "^12.10.0",
+    "firebase-admin": "^13.7.0",
     "framer-motion": "^12.35.0",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.462.0",
