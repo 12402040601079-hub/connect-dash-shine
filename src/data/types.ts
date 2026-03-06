@@ -3,7 +3,7 @@ export interface User {
   name: string;
   email: string;
   phone: string;
-  role: "poster" | "helper" | "both";
+  role: "requester" | "helper" | "both";
   interests: string[];
   rating: number;
   joinedDate: string;
@@ -14,11 +14,21 @@ export interface Task {
   id: string;
   title: string;
   description: string;
-  price: number;
-  location: { lat: number; lng: number; address: string };
-  status: "open" | "in_progress" | "completed" | "cancelled";
-  posterId: string;
   category: string;
+  location: { lat: number; lng: number; address: string; city?: string };
+  schedule?: { date: string; time: string };
+  paymentOptional?: number | null;
+  acceptedBy?: string | null;
+  acceptedBidId?: string | null;
+  status:
+    | "open"
+    | "accepted"
+    | "in_progress"
+    | "completion_requested"
+    | "completed"
+    | "closed"
+    | "cancelled";
+  posterId: string;
   createdAt: string;
 }
 
@@ -28,7 +38,7 @@ export interface Bid {
   helperId: string;
   amount: number;
   message: string;
-  status: "pending" | "accepted" | "rejected";
+  status: "pending" | "accepted" | "rejected" | "withdrawn";
   createdAt: string;
 }
 

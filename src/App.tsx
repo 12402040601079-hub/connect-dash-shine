@@ -4,8 +4,12 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider } from "@/contexts/AuthContext";
 import MicroLink from "@/components/MicroLink";
+import SuperAdminApp from "@/pages/super-admin";
 
 const queryClient = new QueryClient();
+
+const isSuperAdminPath =
+  typeof window !== "undefined" && window.location.pathname.startsWith("/super-admin");
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -13,7 +17,7 @@ const App = () => (
       <AuthProvider>
         <Toaster />
         <Sonner />
-        <MicroLink />
+        {isSuperAdminPath ? <SuperAdminApp /> : <MicroLink />}
       </AuthProvider>
     </TooltipProvider>
   </QueryClientProvider>

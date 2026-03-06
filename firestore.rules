@@ -5,6 +5,47 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isAdmin() {
+      return signedIn() && request.auth.token.admin == true;
+    }
+
+    function isTaskPoster(task) {
+      return signedIn() && task.posterId == request.auth.uid;
+    }
+
+    function isAcceptedHelper(task) {
+      return signedIn() && task.acceptedBy == request.auth.uid;
+    }
+
+    function validTaskCreate() {
+      return request.resource.data.posterId == request.auth.uid &&
+        request.resource.data.title is string &&
+        request.resource.data.description is string &&
+        request.resource.data.status == 'open' &&
+        request.resource.data.acceptedBy == null &&
+        request.resource.data.acceptedBidId == null;
+    }
+
+    function posterAcceptingBid() {
+      return isTaskPoster(resource.data) &&
+        resource.data.status == 'open' &&
+        request.resource.data.status == 'accepted' &&
+        request.resource.data.acceptedBy is string &&
+        request.resource.data.acceptedBidId is string;
+    }
+
+    function helperRequestingCompletion() {
+      return isAcceptedHelper(resource.data) &&
+        resource.data.status in ['accepted', 'in_progress'] &&
+        request.resource.data.status == 'completion_requested';
+    }
+
+    function posterConfirmingCompletion() {
+      return isTaskPoster(resource.data) &&
+        resource.data.status == 'completion_requested' &&
+        request.resource.data.status == 'completed';
+    }
+
     function isParticipant(conversationId) {
       return signedIn() &&
         request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
@@ -13,20 +54,16 @@ service cloud.firestore {
     match /profiles/{userId} {
       allow read: if signedIn();
       allow create: if signedIn() && request.auth.uid == userId;
-      allow update: if signedIn() && request.auth.uid == userId;
+      allow update: if signedIn() && (request.auth.uid == userId || isAdmin());
       allow delete: if false;
     }
 
     match /tasks/{taskId} {
       allow read: if signedIn();
-      allow create: if signedIn() &&
-        request.resource.data.posterId == request.auth.uid &&
-        request.resource.data.title is string &&
-        request.resource.data.description is string &&
-        request.resource.data.budget is number &&
-        request.resource.data.status in ['open', 'in_progress', 'closed'];
-      allow update, delete: if signedIn() &&
-        resource.data.posterId == request.auth.uid;
+      allow create: if signedIn() && validTaskCreate();
+      allow update: if signedIn() &&
+        (posterAcceptingBid() || helperRequestingCompletion() || posterConfirmingCompletion() || isAdmin());
+      allow delete: if isAdmin();
     }
 
     match /bids/{bidId} {
@@ -40,12 +77,14 @@ service cloud.firestore {
         request.resource.data.helperId == request.auth.uid &&
         request.resource.data.posterId is string &&
         request.resource.data.taskId is string &&
-        request.resource.data.amount is number;
+        request.resource.data.amount is number &&
+        request.resource.data.status == 'pending';
 
       allow update: if signedIn() &&
         (
           resource.data.helperId == request.auth.uid ||
-          resource.data.posterId == request.auth.uid
+          resource.data.posterId == request.auth.uid ||
+          isAdmin()
         );
 
       allow delete: if signedIn() && resource.data.helperId == request.auth.uid;
@@ -67,6 +106,36 @@ service cloud.firestore {
           request.resource.data.text is string;
         allow update, delete: if false;
       }
+    }
+
+    match /ratings/{ratingId} {
+      allow read: if signedIn();
+      allow create: if signedIn() &&
+        request.resource.data.fromUserId == request.auth.uid &&
+        request.resource.data.stars is int &&
+        request.resource.data.stars >= 1 && request.resource.data.stars <= 5 &&
+        get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.status == 'completed' &&
+        get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.posterId == request.auth.uid &&
+        get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.acceptedBy == request.resource.data.toUserId;
+      allow update, delete: if false;
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow create: if signedIn() && (request.resource.data.userId == request.auth.uid || isAdmin());
+      allow update: if signedIn() && resource.data.userId == request.auth.uid;
+      allow delete: if false;
+    }
+
+    match /reports/{reportId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.reporterId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    match /admin_actions/{actionId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
     }
   }
 }

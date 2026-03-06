@@ -4,13 +4,13 @@ type Item = { id: string; label: string };
 
 const items: Item[] = [
   { id: "dashboard", label: "Dashboard" },
+  { id: "moderation", label: "Moderation" },
+  { id: "trust-safety", label: "Trust Safety" },
   { id: "users", label: "Users" },
   { id: "jobs", label: "Jobs" },
   { id: "reports", label: "Reports" },
   { id: "categories", label: "Categories" },
   { id: "analytics", label: "Analytics" },
-  { id: "notifications", label: "Notifications" },
-  { id: "settings", label: "Settings" },
 ];
 
 export default function Sidebar({

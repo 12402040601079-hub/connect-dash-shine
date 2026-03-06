@@ -35,9 +35,34 @@ type Profile = {
   address: string;
   bio: string;
   interests: string[];
-  role: string;
+  role: "requester" | "helper" | "both";
   joinedDate: string;
   joinedFull: string;
+  location?: {
+    city: string;
+    lat: number;
+    lng: number;
+    geohash?: string;
+  };
+  helperMeta?: {
+    skills: string[];
+    availability: {
+      weekdays: string[];
+      startHour: number;
+      endHour: number;
+      timezone: string;
+    };
+    experienceYears: number;
+    verified: boolean;
+    isSuspended: boolean;
+  };
+  stats?: {
+    completedCount: number;
+    ratingAvg: number;
+    ratingCount: number;
+  };
+  onboardingComplete?: boolean;
+  authProvider?: "password" | "google" | "apple" | "unknown";
 };
 
 type AuthContextType = {
@@ -49,6 +74,7 @@ type AuthContextType = {
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signInWithGoogle: () => Promise<{ error: Error | null; redirected?: boolean }>;
   signInWithApple: () => Promise<{ error: Error | null; redirected?: boolean }>;
+  upsertProfile: (profileData: Partial<Profile>) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
 };
 
@@ -71,9 +97,17 @@ const makeDefaultProfile = (user: User | null): Profile | null => {
     address: "",
     bio: "",
     interests: [],
-    role: "user",
+    role: "requester",
     joinedDate: new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }),
     joinedFull: new Date().toISOString(),
+    onboardingComplete: false,
+    authProvider: user.providerData?.[0]?.providerId === "password"
+      ? "password"
+      : user.providerData?.[0]?.providerId === "google.com"
+        ? "google"
+        : user.providerData?.[0]?.providerId === "apple.com"
+          ? "apple"
+          : "unknown",
   };
 };
 
@@ -137,6 +171,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ...makeDefaultProfile(cred.user)!,
         ...profileData,
         email: email.toLowerCase(),
+        onboardingComplete: true,
+        authProvider: "password",
       };
       if (firestore) {
         await setDoc(doc(firestore, "profiles", cred.user.uid), mergedProfile, { merge: true });
@@ -200,6 +236,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const upsertProfile: AuthContextType["upsertProfile"] = async (profileData) => {
+    if (!firebaseAuth?.currentUser) {
+      return { error: new Error("No authenticated user") };
+    }
+    if (!firestore) {
+      return { error: new Error("Firestore is not configured") };
+    }
+
+    try {
+      const uid = firebaseAuth.currentUser.uid;
+      const mergedProfile: Profile = {
+        ...(makeDefaultProfile(firebaseAuth.currentUser) as Profile),
+        ...(profile || {}),
+        ...profileData,
+        email: (profileData.email || profile?.email || firebaseAuth.currentUser.email || "").toLowerCase(),
+        onboardingComplete: true,
+      };
+
+      await setDoc(doc(firestore, "profiles", uid), mergedProfile, { merge: true });
+      if (mergedProfile.name) {
+        await updateProfile(firebaseAuth.currentUser, { displayName: mergedProfile.name });
+      }
+      setProfile(mergedProfile);
+      return { error: null };
+    } catch (err) {
+      return { error: err as Error };
+    }
+  };
+
   const signOut = async () => {
     if (!firebaseAuth) return;
     await firebaseSignOut(firebaseAuth);
@@ -215,6 +280,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signIn,
       signInWithGoogle,
       signInWithApple,
+      upsertProfile,
       signOut,
     }),
     [user, profile, loading]

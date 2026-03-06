@@ -1,9 +1,11 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   addDoc,
   collection,
   doc,
+  getDoc,
   onSnapshot,
   query,
   serverTimestamp,
@@ -12,6 +14,20 @@ import {
   orderBy,
 } from "firebase/firestore";
 import { firestore } from "@/integrations/firebase/client";
+import {
+  acceptBid as acceptTaskBid,
+  confirmCompletion,
+  createTask,
+  requestCompletion,
+  watchMyPostedTasks,
+} from "@/services/tasks";
+import { placeBid as placeTaskBid } from "@/services/bids";
+import { getMyNotifications, markNotificationRead } from "@/services/notifications";
+import { submitRating } from "@/services/ratings";
+import BidList from "@/components/workflow/BidList";
+import CompletionPanel from "@/components/workflow/CompletionPanel";
+import NotificationsPanel from "@/components/workflow/NotificationsPanel";
+import RatingDialog from "@/components/workflow/RatingDialog";
 
 /* ═══════════════════════════════════════════════════════
    GLOBAL CSS — GLASSMORPHISM PREMIUM
@@ -251,6 +267,7 @@ const INTS=[
   {id:"gardening",label:"Gardening",ic:"sparkles",color:"#22c55e"},
   {id:"cooking",label:"Cooking",ic:"star",color:"#f97316"},
   {id:"moving",label:"Moving",ic:"zap",color:"#a78bfa"},
+  {id:"other",label:"Other",ic:"edit",color:"#64748b"},
 ];
 
 /* ═══════════════════════════════════════════════════════
@@ -305,7 +322,7 @@ function GCard({children,t,style={},className="",onClick}:any){
    LOGIN PAGE
 ═══════════════════════════════════════════════════════ */
 function LoginPage({onLogin,t,isDark,toggleTheme}:any){
-  const { user, signUp, signIn, signInWithGoogle, signInWithApple, configError } = useAuth();
+  const { user, profile, signUp, signIn, signInWithGoogle, signInWithApple, upsertProfile, configError } = useAuth();
   const [step,setStep]=useState(1);
   const [mode,setMode]=useState<"register"|"signin">("register");
   const [role,setRole]=useState(null);
@@ -314,6 +331,28 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
   const [authError,setAuthError]=useState("");
   const [err,setErr]=useState<any>({});
   const [form,setForm]=useState<any>({name:"",age:"",gender:"",address:"",email:"",phone:"",password:"",bio:"",interests:[]});
+  const [customInterest,setCustomInterest]=useState("");
+
+  const socialIncomplete = Boolean(user && !isProfileComplete(profile));
+
+  useEffect(()=>{
+    if(!socialIncomplete) return;
+    setMode("register");
+    setStep(2);
+    setRole(null);
+    setForm((prev:any)=>({
+      ...prev,
+      name: profile?.name || user?.displayName || prev.name || "",
+      email: profile?.email || user?.email || prev.email || "",
+      phone: profile?.phone || prev.phone || "",
+      age: profile?.age || prev.age || "",
+      gender: profile?.gender || prev.gender || "",
+      address: profile?.address || prev.address || "",
+      bio: profile?.bio || prev.bio || "",
+      interests: Array.isArray(profile?.interests) ? profile.interests : prev.interests,
+      password: "",
+    }));
+  },[socialIncomplete, profile, user]);
 
   const upd=(k,v)=>{setForm(p=>({...p,[k]:v}));setErr(p=>({...p,[k]:""}));};
   const togInt=(id)=>setForm(p=>({...p,interests:p.interests.includes(id)?p.interests.filter(x=>x!==id):[...p.interests,id]}));
@@ -339,10 +378,12 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
     if(!form.name.trim())e.name="Full name is required";
     if(!form.email.trim()||!/\S+@\S+\.\S+/.test(form.email))e.email="Valid email required";
     if(!form.phone.trim()||form.phone.replace(/\D/g,"").length<10)e.phone="Valid phone (10+ digits)";
-    if(!form.password||form.password.length<6)e.password="Min 6 characters";
+    if(!socialIncomplete && (!form.password||form.password.length<6))e.password="Min 6 characters";
     if(!form.age||parseInt(form.age)<16||parseInt(form.age)>100)e.age="Age must be 16–100";
     if(!form.gender)e.gender="Please select gender";
     if(!form.address.trim())e.address="Address is required";
+    if(!role)e.role="Please choose a role";
+    if(form.interests.includes("other") && !customInterest.trim())e.customInterest="Add your custom category";
     setErr(e);return Object.keys(e).length===0;
   };
 
@@ -350,8 +391,13 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
     if(!validate())return;
     setAuthLoading(true);
     setAuthError("");
+    const normalizedInterests = [
+      ...form.interests.filter((interest:string)=>interest!=="other"),
+      ...(form.interests.includes("other") && customInterest.trim() ? [customInterest.trim()] : []),
+    ];
+
     try {
-      const { error } = await signUp(form.email.trim().toLowerCase(), form.password, {
+      const profilePayload = {
         name: form.name.trim(),
         email: form.email.trim().toLowerCase(),
         phone: form.phone.trim(),
@@ -359,9 +405,15 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
         gender: form.gender,
         address: form.address.trim(),
         bio: form.bio.trim(),
-        interests: form.interests,
-        role: role || "user",
-      });
+        interests: normalizedInterests,
+        role: role || "requester",
+        onboardingComplete: true,
+      };
+
+      const { error } = socialIncomplete
+        ? await upsertProfile(profilePayload)
+        : await signUp(form.email.trim().toLowerCase(), form.password, profilePayload);
+
       if (error) {
         setAuthError(error.message || "Registration failed");
         setAuthLoading(false);
@@ -402,8 +454,9 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
     if (result.redirected) {
       return;
     }
-    setStep(3);
-    setTimeout(()=>onLogin(), 1200);
+    setMode("register");
+    setStep(2);
+    setRole(null);
     setAuthLoading(false);
   };
 
@@ -417,7 +470,7 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
       </div>
       <div style={{textAlign:"center"}}>
         <h2 className="su1" style={{fontFamily:"Syne",fontSize:34,fontWeight:800,color:t.text,marginBottom:10}}>Welcome, {welcomeName}!</h2>
-        <p className="su2" style={{color:t.sub,fontSize:16}}>Preparing your {role==="helper"?"helper":"user"} dashboard…</p>
+        <p className="su2" style={{color:t.sub,fontSize:16}}>Preparing your {roleLabel(role)} dashboard…</p>
       </div>
       <div className="su3" style={{display:"flex",gap:8}}>
         {[0,1,2].map(i=><div key={i} style={{width:10,height:10,borderRadius:"50%",background:t.primary,animation:`dotBounce 1s ease-in-out ${i*.2}s infinite`}}/>)}
@@ -471,18 +524,22 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
     <div className="su" style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",padding:"28px 16px 80px"}}>
       <div style={{width:"100%",maxWidth:600}}>
         <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:22}}>
-          <button className="press" onClick={()=>setStep(1)}
+          <button className="press" onClick={()=>{if(!socialIncomplete)setStep(1);}}
+            disabled={socialIncomplete}
             style={{width:40,height:40,borderRadius:12,background:t.secondary,border:`1px solid ${t.border}`,display:"flex",alignItems:"center",justifyContent:"center",color:t.muted,cursor:"pointer"}}>
             <I n="arL" s={16}/>
           </button>
           <div style={{flex:1}}>
-            <h2 style={{fontFamily:"Poppins",fontSize:22,fontWeight:800,color:t.text}}>{role==="helper"?"Helper Registration":"User Registration"}</h2>
+            <h2 style={{fontFamily:"Poppins",fontSize:22,fontWeight:800,color:t.text}}>{role==="helper"?"Helper Registration":role==="both"?"Requester + Helper Registration":"Requester Registration"}</h2>
             <p style={{fontSize:12,color:t.muted,marginTop:3}}>All fields become your real profile data</p>
+            {socialIncomplete && <p style={{fontSize:11,color:t.primary,marginTop:4,fontWeight:700}}>Complete your profile to continue</p>}
           </div>
           <span style={{padding:"4px 14px",borderRadius:99,fontSize:11,fontWeight:700,background:role==="helper"?`${t.accent}20`:`${t.primary}20`,color:role==="helper"?t.accent:t.primary,border:`1px solid ${role==="helper"?t.accent+"40":t.primary+"40"}`}}>
-            {role==="helper"?"Helper":"User"}
+            {roleLabel(role)}
           </span>
         </div>
+
+        {err.role && <p style={{fontSize:12,color:t.danger,fontWeight:700,marginBottom:10}}>⚠ {err.role}</p>}
 
         {/* Progress bar */}
         <div style={{marginBottom:22}}>
@@ -517,7 +574,7 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
               <textarea value={form.bio} onChange={e=>upd("bio",e.target.value)} placeholder={role==="helper"?"Describe your experience and skills…":"What kind of help are you looking for?"}
                 style={{width:"100%",padding:"12px 16px",borderRadius:12,background:t.mode==="dark"?"rgba(139,92,246,0.06)":"rgba(255,255,255,0.75)",border:`1.5px solid ${t.border}`,color:t.text,fontSize:14,outline:"none",resize:"vertical",minHeight:72,backdropFilter:"blur(8px)",fontFamily:"Poppins"}}/>
             </div>
-            <div style={{gridColumn:"1/-1"}}>
+            {!socialIncomplete && <div style={{gridColumn:"1/-1"}}>
               <GlassInp label="Password *" ic="shield" type={showPw?"text":"password"} value={form.password} onChange={e=>upd("password",e.target.value)} placeholder="Create a strong password" t={t} err={err.password}
                 suffix={<button onClick={()=>setShowPw(s=>!s)} style={{background:"none",border:"none",cursor:"pointer",color:t.muted,display:"flex",padding:0}}><I n={showPw?"eyeO":"eye"} s={15}/></button>}
               />
@@ -531,7 +588,7 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
                   <span style={{fontSize:11,fontWeight:800,color:pwStr.c}}>{pwStr.l}</span>
                 </div>
               )}
-            </div>
+            </div>}
           </div>
 
           {/* Interests */}
@@ -559,6 +616,20 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
                 );
               })}
             </div>
+
+            {form.interests.includes("other") && (
+              <div style={{marginTop:10}}>
+                <GlassInp
+                  label="Custom Category"
+                  ic="edit"
+                  value={customInterest}
+                  onChange={(e:any)=>{setCustomInterest(e.target.value);setErr((p:any)=>({...p,customInterest:""}));}}
+                  placeholder="Type your category (e.g. Drone Setup, Event Support)"
+                  t={t}
+                  err={err.customInterest}
+                />
+              </div>
+            )}
           </div>
 
           {(authError||configError)&&<p style={{fontSize:12,color:t.danger,fontWeight:600,textAlign:"center",marginTop:12}}>⚠ {authError||configError}</p>}
@@ -623,8 +694,9 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
 
         <div style={{display:"flex",gap:20,justifyContent:"center",flexWrap:"wrap"}}>
           {[
-            {r:"user",title:"Join as User",desc:"Post tasks, find verified helpers nearby",ic:"brief",col:t.primary,grad:t.primaryGrad,feats:["Post unlimited tasks","Smart AI matching","Secure escrow payments","Rate & review helpers"]},
+            {r:"requester",title:"Join as Requester",desc:"Post tasks, find verified helpers nearby",ic:"brief",col:t.primary,grad:t.primaryGrad,feats:["Post unlimited tasks","Smart AI matching","Secure escrow payments","Rate & review helpers"]},
             {r:"helper",title:"Join as Helper",desc:"Earn by helping your community",ic:"wrench",col:t.accent,grad:t.accentGrad,feats:["Set your own rates","Flexible schedule","Build reputation","Get paid instantly"]},
+            {r:"both",title:"Join as Both",desc:"Post tasks and help others nearby",ic:"sparkles",col:"#3b82f6",grad:"linear-gradient(135deg,#3b82f6,#06b6d4)",feats:["Switch between requester and helper","Maximize opportunities","Build trust faster","Access full workflow"]},
           ].map(({r,title,desc,ic,col,grad,feats})=>(
             <RoleCard key={r} title={title} desc={desc} ic={ic} col={col} grad={grad} feats={feats} t={t}
               onClick={()=>{setRole(r);setStep(2);}}/>
@@ -701,10 +773,11 @@ const NAV=[
   {id:"discover",label:"Discover",ic:"compass"},
   {id:"bidding",label:"Bidding",ic:"tag"},
   {id:"chat",label:"Chat",ic:"msg"},
+  {id:"notifications",label:"Alerts",ic:"bell"},
   {id:"profile",label:"Profile",ic:"user"},
 ];
 
-function Sidebar({page,setPage,t,isDark,toggleTheme,online,setOnline,user}:any){
+function Sidebar({page,setPage,t,isDark,toggleTheme,online,setOnline,user,unreadCount}:any){
   const initials=user?.name?.split(" ").map(w=>w[0]).join("").toUpperCase().slice(0,2)||"?";
   return(
     <aside style={{width:220,minHeight:"100vh",background:t.mode==="dark"?"rgba(7,6,26,0.85)":"rgba(240,235,255,0.88)",backdropFilter:"blur(24px)",borderRight:`1px solid ${t.border}`,display:"flex",flexDirection:"column",padding:"20px 10px 16px",position:"sticky",top:0,flexShrink:0,zIndex:10}}>
@@ -727,7 +800,7 @@ function Sidebar({page,setPage,t,isDark,toggleTheme,online,setOnline,user}:any){
             {a&&<div style={{position:"absolute",left:0,top:"50%",transform:"translateY(-50%)",width:3,height:20,background:`linear-gradient(180deg,${t.primary},${t.accent})`,borderRadius:"0 3px 3px 0"}}/>}
             <I n={item.ic} s={16}/>
             {item.label}
-            {item.id==="chat"&&<span style={{marginLeft:"auto",background:`linear-gradient(135deg,${t.primary},${t.accent})`,color:"#fff",borderRadius:99,fontSize:9,fontWeight:800,padding:"2px 7px",boxShadow:`0 0 8px ${t.primary}50`}}>2</span>}
+            {item.id==="notifications" && unreadCount>0 && <span style={{marginLeft:"auto",background:`linear-gradient(135deg,${t.primary},${t.accent})`,color:"#fff",borderRadius:99,fontSize:9,fontWeight:800,padding:"2px 7px",boxShadow:`0 0 8px ${t.primary}50`}}>{unreadCount}</span>}
           </button>
         );
       })}
@@ -825,7 +898,7 @@ function VoiceBtn({t}:any){
   );
 }
 
-function TopBar({t,user,online,setOnline,setPage,onSignOut}:any){
+function TopBar({t,user,online,setOnline,setPage,onSignOut,unreadCount}:any){
   const initials=user?.name?.split(" ").map(w=>w[0]).join("").toUpperCase().slice(0,2)||"?";
   return(
     <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",padding:"14px 0 6px",gap:12}}>
@@ -838,6 +911,11 @@ function TopBar({t,user,online,setOnline,setPage,onSignOut}:any){
         <I n="x" s={12} c={t.muted}/>
         Sign out
       </button>
+      <button onClick={()=>setPage("notifications")}
+        style={{display:"flex",alignItems:"center",gap:6,padding:"8px 12px",borderRadius:99,background:t.secondary,border:`1px solid ${t.border}`,cursor:"pointer",color:t.muted,fontSize:12,fontWeight:700}}>
+        <I n="bell" s={12} c={t.muted}/>
+        Alerts {unreadCount>0 && <strong>({unreadCount})</strong>}
+      </button>
       <button onClick={()=>setPage("profile")}
         style={{width:38,height:38,borderRadius:"50%",background:`linear-gradient(135deg,${t.primary},${t.accent})`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800,color:"#fff",fontFamily:"Poppins",boxShadow:`0 0 16px ${t.glow}`}}>
         {initials}
@@ -849,38 +927,137 @@ function TopBar({t,user,online,setOnline,setPage,onSignOut}:any){
 /* ═══════════════════════════════════════════════════════
    DASHBOARD
 ═══════════════════════════════════════════════════════ */
-function Dashboard({t,user,setPage,postedTasks,onRemoveTask}:any){
+function Dashboard({t,user,setPage,postedTasks,currentUid}:any){
   const activeTaskCount=postedTasks?.length||0;
-  const [taskToRemove,setTaskToRemove]=useState<any>(null);
+  const completedCount=(postedTasks||[]).filter((task:any)=>task?.status==="completed").length;
+  const ratingValue = user?.stats?.ratingAvg ? Number(user.stats.ratingAvg).toFixed(1) : "—";
+  const [bidsByTask,setBidsByTask]=useState<any>({});
+  const [dashError,setDashError]=useState("");
+  const [ratingTask,setRatingTask]=useState<any>(null);
+  const [ratingSubmitting,setRatingSubmitting]=useState(false);
   const greeting=()=>{const h=new Date().getHours();return h<12?"Good morning":h<17?"Good afternoon":"Good evening";};
 
+  useEffect(()=>{
+    if(!firestore || !currentUid) return;
+    const unsub = onSnapshot(query(collection(firestore, "bids"), where("posterId", "==", currentUid), orderBy("createdAt", "desc")), snap=>{
+      const next:any = {};
+      snap.docs.forEach(d=>{
+        const row:any = { id:d.id, ...d.data() };
+        const taskId = row.taskId;
+        if(!next[taskId]) next[taskId]=[];
+        next[taskId].push(row);
+      });
+      setBidsByTask(next);
+    });
+    return ()=>unsub();
+  },[currentUid]);
+
+  const handleAcceptBid = async (task:any, bidId:string) => {
+    const selected = (bidsByTask?.[task.id] || []).find((row:any)=>row.id===bidId);
+    if(!selected) return;
+    setDashError("");
+    try{
+      await acceptTaskBid({
+        taskId: task.id,
+        bidId,
+        helperId: selected.helperId,
+        posterId: currentUid,
+        currentStatus: task.status,
+        taskTitle: task.title,
+      });
+    }catch(e:any){
+      setDashError(e?.message || "Failed to accept bid");
+    }
+  };
+
+  const handleConfirmCompletion = async (task:any) => {
+    if(!task?.acceptedBy) return;
+    setDashError("");
+    try{
+      await confirmCompletion({
+        taskId: task.id,
+        helperId: task.acceptedBy,
+        posterId: currentUid,
+        currentStatus: task.status,
+        taskTitle: task.title,
+      });
+    }catch(e:any){
+      setDashError(e?.message || "Failed to confirm completion");
+    }
+  };
+
+  const submitTaskRating = async (stars:number, review:string) => {
+    if(!ratingTask?.acceptedBy || !currentUid) return;
+    setRatingSubmitting(true);
+    setDashError("");
+    try {
+      const ratingId = `${ratingTask.id}_${currentUid}_${ratingTask.acceptedBy}`;
+      if (firestore) {
+        const existing = await getDoc(doc(firestore, "ratings", ratingId));
+        if (existing.exists()) {
+          setDashError("Rating already submitted for this task.");
+          setRatingSubmitting(false);
+          setRatingTask(null);
+          return;
+        }
+      }
+
+      await submitRating({
+        taskId: ratingTask.id,
+        fromUserId: currentUid,
+        toUserId: ratingTask.acceptedBy,
+        stars,
+        review,
+      });
+      setRatingTask(null);
+    } catch (e:any) {
+      setDashError(e?.message || "Failed to submit rating");
+    }
+    setRatingSubmitting(false);
+  };
+
   const stats=[
-    {label:user?.role==="helper"?"Tasks Completed":"Tasks Posted",val:activeTaskCount,ic:"checkC",badge:activeTaskCount>0?"Updated":"Post your first task",col:t.accent,grad:t.accentGrad},
-    {label:"Active Tasks",val:activeTaskCount,ic:"clock",badge:activeTaskCount>0?"Live now":"Browse tasks",col:t.warn,grad:`linear-gradient(135deg,${t.warn},#f97316)`},
-    {label:"Rating",val:"—",ic:"star",badge:"No reviews yet",col:"#fbbf24",grad:"linear-gradient(135deg,#fbbf24,#f59e0b)"},
+    {label:user?.role==="helper"?"Tasks Completed":"Tasks Posted",val:activeTaskCount,ic:"checkC",badge:activeTaskCount>0?"Updated":"Post your first task",col:t.accent},
+    {label:"Completed",val:completedCount,ic:"clock",badge:completedCount>0?"Great progress":"No completions yet",col:t.warn},
+    {label:"Rating",val:ratingValue,ic:"star",badge:ratingValue==="—"?"No reviews yet":"Live",col:"#fbbf24"},
   ];
+
+  const quickActions = user?.role==="helper"
+    ? [
+      {label:"Browse Tasks",ic:"compass",col:t.primary,target:"discover"},
+      {label:"View My Bids",ic:"tag",col:t.accent,target:"bidding"},
+      {label:"Check Messages",ic:"msg",col:"#3b82f6",target:"chat"},
+    ]
+    : user?.role==="both"
+      ? [
+        {label:"Post Task",ic:"plus",col:t.primary,target:"post-task"},
+        {label:"Browse Tasks",ic:"compass",col:t.accent,target:"discover"},
+        {label:"View My Bids",ic:"tag",col:"#0ea5e9",target:"bidding"},
+        {label:"Check Messages",ic:"msg",col:"#3b82f6",target:"chat"},
+      ]
+      : [
+        {label:"Post Task",ic:"plus",col:t.primary,target:"post-task"},
+        {label:"Find Helpers",ic:"compass",col:t.accent,target:"discover"},
+        {label:"Messages",ic:"msg",col:"#3b82f6",target:"chat"},
+      ];
 
   return(
     <div className="su" style={{padding:"20px 0",maxWidth:920}}>
-      {/* Header */}
       <div style={{marginBottom:28}}>
-        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
-          <div>
-            <p style={{fontSize:13,color:t.muted,fontWeight:600,marginBottom:6}}>{greeting()}, {new Date().toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long"})}</p>
-            <h2 style={{fontFamily:"Poppins",fontSize:28,fontWeight:800,color:t.text,letterSpacing:"-0.5px"}}>
-              Welcome back, {user?.name?.split(" ")[0]} 👋
-            </h2>
-            <div style={{display:"flex",alignItems:"center",gap:8,marginTop:8}}>
-              <span style={{padding:"3px 12px",borderRadius:99,fontSize:11,fontWeight:700,background:user?.role==="helper"?`${t.accent}20`:`${t.primary}20`,color:user?.role==="helper"?t.accent:t.primary,border:`1px solid ${user?.role==="helper"?t.accent+"40":t.primary+"40"}`}}>
-                {user?.role==="helper"?"⚡ Helper":"👤 User"}
-              </span>
-              <span style={{fontSize:12,color:t.muted}}>Joined {user?.joinedDate}</span>
-            </div>
-          </div>
+        <p style={{fontSize:13,color:t.muted,fontWeight:600,marginBottom:6}}>{greeting()}, {new Date().toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long"})}</p>
+        <h2 style={{fontFamily:"Poppins",fontSize:28,fontWeight:800,color:t.text,letterSpacing:"-0.5px"}}>
+          Welcome back, {user?.name?.split(" ")[0]} 👋
+        </h2>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginTop:8}}>
+          <span style={{padding:"3px 12px",borderRadius:99,fontSize:11,fontWeight:700,background:user?.role==="helper"?`${t.accent}20`:`${t.primary}20`,color:user?.role==="helper"?t.accent:t.primary,border:`1px solid ${user?.role==="helper"?t.accent+"40":t.primary+"40"}`}}>
+            {user?.role==="helper"?"⚡ Helper":user?.role==="both"?"⚡ Both":"👤 Requester"}
+          </span>
+          <span style={{fontSize:12,color:t.muted}}>Joined {user?.joinedDate}</span>
         </div>
       </div>
 
-      {/* Stats */}
+      {dashError&&<p style={{fontSize:12,color:t.danger,fontWeight:700,marginBottom:12}}>⚠ {dashError}</p>}
+
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))",gap:14,marginBottom:28}}>
         {stats.map((s,i)=>(
           <GCard key={s.label} t={t} className={`su${i}`} style={{padding:"20px 20px"}}>
@@ -896,19 +1073,10 @@ function Dashboard({t,user,setPage,postedTasks,onRemoveTask}:any){
         ))}
       </div>
 
-      {/* Quick actions */}
       <div style={{marginBottom:24}}>
         <h3 style={{fontFamily:"Poppins",fontSize:15,fontWeight:700,color:t.text,marginBottom:13}}>Quick Actions</h3>
         <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-          {(user?.role==="helper"?[
-            {label:"Browse Tasks",ic:"compass",col:t.primary,target:"discover"},
-            {label:"View My Bids",ic:"tag",col:t.accent,target:"bidding"},
-            {label:"Check Messages",ic:"msg",col:"#3b82f6",target:"chat"},
-          ]:[
-            {label:"Post Task",ic:"plus",col:t.primary,target:"post-task"},
-            {label:"Find Helpers",ic:"compass",col:t.accent,target:"discover"},
-            {label:"Messages",ic:"msg",col:"#3b82f6",target:"chat"},
-          ]).map(a=>(
+          {quickActions.map(a=>(
             <button key={a.label} className="press hover-lift"
               onClick={()=>setPage(a.target)}
               style={{display:"flex",alignItems:"center",gap:8,padding:"10px 18px",borderRadius:12,background:`${a.col}12`,color:a.col,border:`1.5px solid ${a.col}30`,cursor:"pointer",fontSize:13,fontWeight:700,backdropFilter:"blur(8px)"}}>
@@ -923,52 +1091,68 @@ function Dashboard({t,user,setPage,postedTasks,onRemoveTask}:any){
         <GCard t={t} style={{padding:"10px 0",overflow:"hidden"}}>
           {activeTaskCount===0?(
             <div style={{padding:"18px 20px",color:t.muted,fontSize:13}}>No tasks posted yet. Use <strong>Post Task</strong> to create your first task.</div>
-          ):postedTasks.map((task:any,i:number,arr:any[])=>(
-            <div key={task.id} style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,padding:"14px 20px",borderBottom:i<arr.length-1?`1px solid ${t.border}`:"none"}}>
-              <div>
-                <div style={{fontSize:14,fontWeight:700,color:t.text,marginBottom:4}}>{task.title}</div>
-                <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-                  <span style={{fontSize:11,color:t.muted}}>{task.category}</span>
-                  <span style={{fontSize:11,color:t.muted}}>{task.location}</span>
-                  <span style={{fontSize:11,color:t.muted}}>{task.createdAt}</span>
+          ):(postedTasks||[]).map((task:any,i:number,arr:any[])=>(
+            <div key={task.id} style={{padding:"14px 20px",borderBottom:i<arr.length-1?`1px solid ${t.border}`:"none"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
+                <div>
+                  <div style={{fontSize:14,fontWeight:700,color:t.text,marginBottom:4}}>{task.title}</div>
+                  <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+                    <span style={{fontSize:11,color:t.muted}}>{task.category || "General"}</span>
+                    <span style={{fontSize:11,color:t.muted}}>{taskLocationLabel(task)}</span>
+                    <span style={{fontSize:11,color:t.muted}}>{fmtRelative(task.createdAt)}</span>
+                  </div>
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontSize:13,fontWeight:800,color:t.text}}>INR {taskBudgetValue(task)}</div>
+                  <div style={{fontSize:10,color:t.primary,fontWeight:700,textTransform:"uppercase"}}>{task.status || "open"}</div>
                 </div>
               </div>
-              <div style={{textAlign:"right"}}>
-                <div style={{fontSize:13,fontWeight:800,color:t.text}}>INR {task.budget}</div>
-                <div style={{fontSize:10,color:task.urgent?t.danger:t.accent,fontWeight:700}}>{task.urgent?"URGENT":"OPEN"}</div>
-                <button className="press" onClick={()=>setTaskToRemove(task)}
-                  style={{marginTop:8,padding:"5px 9px",borderRadius:8,background:`${t.danger}12`,color:t.danger,border:`1px solid ${t.danger}40`,fontSize:10,fontWeight:700,cursor:"pointer"}}>
-                  Remove
-                </button>
-              </div>
+
+              {task.status==="open" && (
+                <div style={{marginTop:10}}>
+                  <BidList
+                    bids={(bidsByTask?.[task.id] || []).map((bid:any)=>(
+                      { id: bid.id, helperName: bid.helperName, amount: bid.amount, note: bid.note, status: bid.status }
+                    ))}
+                    onAccept={(bidId)=>handleAcceptBid(task,bidId)}
+                  />
+                </div>
+              )}
+
+              {task.status!=="open" && task.status!=="completed" && (
+                <div style={{marginTop:10}}>
+                  <CompletionPanel
+                    status={task.status}
+                    isHelper={false}
+                    canRequestCompletion={false}
+                    canConfirmCompletion={task.status==="completion_requested"}
+                    onRequestCompletion={()=>undefined}
+                    onConfirmCompletion={()=>handleConfirmCompletion(task)}
+                  />
+                </div>
+              )}
+
+              {task.status==="completed" && task.acceptedBy && (
+                <div style={{marginTop:10,display:"flex",justifyContent:"flex-end"}}>
+                  <button className="press" onClick={()=>setRatingTask(task)}
+                    style={{padding:"7px 11px",borderRadius:10,background:`${t.accent}18`,color:t.accent,border:`1px solid ${t.accent}35`,fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                    Rate Helper
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </GCard>
       </div>
 
-      {taskToRemove&&(
-        <div style={{position:"fixed",inset:0,background:"transparent",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,padding:16}}>
-          <GCard t={t} style={{width:"min(100%,420px)",padding:"18px 18px"}}>
-            <h4 style={{fontSize:18,fontWeight:800,color:t.text,marginBottom:8}}>Confirm Remove</h4>
-            <p style={{fontSize:14,color:t.sub,lineHeight:1.5,marginBottom:16}}>Are you want to remove the task?</p>
-            <div style={{display:"flex",justifyContent:"flex-end",gap:10}}>
-              <button className="press" onClick={()=>setTaskToRemove(null)}
-                style={{padding:"8px 12px",borderRadius:10,background:t.secondary,border:`1px solid ${t.border}`,color:t.text,cursor:"pointer",fontSize:12,fontWeight:700}}>
-                Cancel
-              </button>
-              <button className="press" onClick={()=>{
-                onRemoveTask(taskToRemove.id);
-                setTaskToRemove(null);
-              }}
-                style={{padding:"8px 12px",borderRadius:10,background:`${t.danger}18`,border:`1px solid ${t.danger}40`,color:t.danger,cursor:"pointer",fontSize:12,fontWeight:700}}>
-                Remove
-              </button>
-            </div>
-          </GCard>
-        </div>
-      )}
+      <RatingDialog
+        open={Boolean(ratingTask)}
+        helperName={ratingTask?.acceptedBy || "helper"}
+        submitting={ratingSubmitting}
+        onClose={()=>setRatingTask(null)}
+        onSubmit={submitTaskRating}
+      />
 
-      {/* Profile info */}
       <h3 style={{fontFamily:"Poppins",fontSize:15,fontWeight:700,color:t.text,marginBottom:13}}>Your Profile Information</h3>
       <GCard t={t} style={{overflow:"hidden"}}>
         {[
@@ -978,8 +1162,8 @@ function Dashboard({t,user,setPage,postedTasks,onRemoveTask}:any){
           {label:"Location",val:user?.address,ic:"pin"},
           {label:"Age",val:user?.age?`${user.age} years old`:null,ic:"cal"},
           {label:"Gender",val:user?.gender,ic:"user"},
-          {label:"Account Type",val:user?.role==="helper"?"Helper Account":"User Account",ic:user?.role==="helper"?"wrench":"brief"},
-          {label:user?.role==="helper"?"Skills & Services":"Interests",val:user?.interests?.length>0?user.interests.map(id=>INTS.find(x=>x.id===id)?.label).filter(Boolean).join(", "):"None selected",ic:"sparkles"},
+          {label:"Account Type",val:user?.role==="helper"?"Helper Account":user?.role==="both"?"Requester + Helper Account":"Requester Account",ic:user?.role==="helper"?"wrench":"brief"},
+          {label:user?.role==="helper"?"Skills & Services":"Interests",val:user?.interests?.length>0?user.interests.map((id:string)=>INTS.find(x=>x.id===id)?.label || id).join(", "):"None selected",ic:"sparkles"},
           ...(user?.bio?[{label:"Bio",val:user.bio,ic:"info"}]:[]),
         ].map((row,i,arr)=>(
           <div key={row.label} style={{display:"flex",alignItems:"center",gap:14,padding:"13px 22px",borderBottom:i<arr.length-1?`1px solid ${t.border}`:"none",transition:"background .15s"}}
@@ -1011,6 +1195,37 @@ const fmtRelative = (value:any) => {
   return `${diffDay} day${diffDay > 1 ? "s" : ""} ago`;
 };
 
+const taskLocationLabel = (task:any) => {
+  if (typeof task?.location === "string") return task.location;
+  return task?.location?.address || task?.location?.city || "Unknown";
+};
+
+const taskBudgetValue = (task:any) => Number(task?.paymentOptional ?? task?.budget ?? 0);
+
+const roleLabel = (role:string) => {
+  if (role === "helper") return "Helper";
+  if (role === "both") return "Requester + Helper";
+  return "Requester";
+};
+
+const isProfileComplete = (profile:any) => {
+  if (!profile) return false;
+  if (profile.onboardingComplete === true) return true;
+
+  const required = [
+    profile.name,
+    profile.email,
+    profile.phone,
+    profile.age,
+    profile.gender,
+    profile.address,
+    profile.role,
+  ];
+  const hasRequired = required.every((value) => String(value || "").trim().length > 0);
+  const hasInterests = Array.isArray(profile.interests) && profile.interests.length > 0;
+  return hasRequired && hasInterests;
+};
+
 const convIdForTask = (taskId:string, uidA:string, uidB:string) => {
   const [x, y] = [uidA, uidB].sort();
   return `${taskId}_${x}_${y}`;
@@ -1021,6 +1236,9 @@ function PostTask({t,setPage,currentUser}:any){
   const [category,setCategory]=useState("General");
   const [budget,setBudget]=useState("");
   const [location,setLocation]=useState("");
+  const [city,setCity]=useState("");
+  const [taskDate,setTaskDate]=useState("");
+  const [taskTime,setTaskTime]=useState("");
   const [description,setDescription]=useState("");
   const [urgent,setUrgent]=useState(false);
   const [posted,setPosted]=useState(false);
@@ -1029,7 +1247,7 @@ function PostTask({t,setPage,currentUser}:any){
 
   const submit=async(e:any)=>{
     e.preventDefault();
-    if(!title.trim()||!budget.trim()||!location.trim()||!description.trim()) return;
+    if(!title.trim()||!budget.trim()||!location.trim()||!description.trim()||!taskDate||!taskTime) return;
     if(!firestore || !currentUser?.uid){
       setError("Please sign in again before posting a task.");
       return;
@@ -1037,18 +1255,23 @@ function PostTask({t,setPage,currentUser}:any){
     setSaving(true);
     setError("");
     try{
-      await addDoc(collection(firestore, "tasks"), {
+      await createTask({
         title: title.trim(),
-        category,
-        budget: Number(budget),
-        location: location.trim(),
         description: description.trim(),
-        urgent,
+        category,
+        paymentOptional: Number(budget),
+        location: {
+          address: location.trim(),
+          city: city.trim() || "Unknown",
+          lat: 0,
+          lng: 0,
+        },
+        schedule: {
+          date: taskDate,
+          time: taskTime,
+        },
         posterId: currentUser.uid,
         posterName: currentUser.name || "User",
-        posterRole: currentUser.role || "user",
-        status: "open",
-        createdAt: serverTimestamp(),
       });
     } catch (e:any){
       setError(e?.message || "Failed to post task");
@@ -1124,6 +1347,24 @@ function PostTask({t,setPage,currentUser}:any){
                 style={{width:"100%",padding:"12px 14px",borderRadius:12,background:t.input,border:`1.5px solid ${t.border}`,color:t.text,fontSize:14,outline:"none"}}/>
             </div>
 
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
+              <div style={{display:"grid",gap:8}}>
+                <label style={{fontSize:12,fontWeight:700,color:t.sub}}>City</label>
+                <input value={city} onChange={e=>setCity(e.target.value)} placeholder="City"
+                  style={{width:"100%",padding:"12px 14px",borderRadius:12,background:t.input,border:`1.5px solid ${t.border}`,color:t.text,fontSize:14,outline:"none"}}/>
+              </div>
+              <div style={{display:"grid",gap:8}}>
+                <label style={{fontSize:12,fontWeight:700,color:t.sub}}>Date</label>
+                <input type="date" value={taskDate} onChange={e=>setTaskDate(e.target.value)}
+                  style={{width:"100%",padding:"12px 14px",borderRadius:12,background:t.input,border:`1.5px solid ${t.border}`,color:t.text,fontSize:14,outline:"none"}}/>
+              </div>
+              <div style={{display:"grid",gap:8}}>
+                <label style={{fontSize:12,fontWeight:700,color:t.sub}}>Time</label>
+                <input type="time" value={taskTime} onChange={e=>setTaskTime(e.target.value)}
+                  style={{width:"100%",padding:"12px 14px",borderRadius:12,background:t.input,border:`1.5px solid ${t.border}`,color:t.text,fontSize:14,outline:"none"}}/>
+              </div>
+            </div>
+
             <div style={{display:"grid",gap:8}}>
               <label style={{fontSize:12,fontWeight:700,color:t.sub}}>Task Description</label>
               <textarea value={description} onChange={e=>setDescription(e.target.value)} rows={4}
@@ -1174,15 +1415,16 @@ function Discover({t,currentUser}:any){
   },[]);
 
   let tasks=[...tasksRaw]
-    .filter((x:any)=>x?.status!=="closed")
+    .filter((x:any)=>!["closed","cancelled","completed"].includes(x?.status))
     .filter((x:any)=>currentUser?.role==="helper" ? x.posterId!==currentUser.uid : true)
     .map((x:any, idx:number)=>({
       ...x,
-      loc:x.location||"Unknown",
+      loc:taskLocationLabel(x),
       cat:x.category||"General",
       desc:x.description||"",
       poster:x.posterName||"User",
       posted:fmtRelative(x.createdAt),
+      budget: taskBudgetValue(x),
       dist:`${((idx%8)+1)/2} km`,
     }));
   if(q)tasks=tasks.filter(x=>x.title.toLowerCase().includes(q.toLowerCase())||x.desc.toLowerCase().includes(q.toLowerCase()));
@@ -1312,13 +1554,18 @@ function Bidding({t,currentUser,setPage}:any){
   const [tasks,setTasks]=useState<any[]>([]);
   const [myBids,setMyBids]=useState<any>({});
   const [loading,setLoading]=useState(true);
+  const [actionError,setActionError]=useState("");
 
   useEffect(()=>{
     if(!firestore || !currentUser?.uid){ setLoading(false); return; }
     const unsubTasks = onSnapshot(query(collection(firestore, "tasks"), orderBy("createdAt","desc")), snap=>{
       const rows = snap.docs
         .map(d=>({id:d.id,...d.data()}))
-        .filter((x:any)=>x.status!=="closed" && x.posterId!==currentUser.uid);
+        .filter((x:any)=>{
+          if (x.posterId===currentUser.uid) return false;
+          const acceptedForMe = x.acceptedBy===currentUser.uid && ["accepted","in_progress","completion_requested"].includes(x.status);
+          return x.status==="open" || acceptedForMe;
+        });
       setTasks(rows);
       setLoading(false);
     });
@@ -1332,18 +1579,15 @@ function Bidding({t,currentUser,setPage}:any){
 
   const placeBid = async (task:any) => {
     if(!firestore || !currentUser?.uid) return;
-    const value = Number(amounts[task.id] || task.budget || 0);
-    await setDoc(doc(firestore, "bids", `${task.id}_${currentUser.uid}`), {
+    const value = Number(amounts[task.id] || taskBudgetValue(task) || 0);
+    await placeTaskBid({
       taskId: task.id,
       helperId: currentUser.uid,
       helperName: currentUser.name || "Helper",
       posterId: task.posterId,
       amount: value,
       note: note[task.id] || "",
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      status: "pending",
-    }, { merge: true });
+    });
 
     const convId = convIdForTask(task.id, currentUser.uid, task.posterId);
     const participants = [currentUser.uid, task.posterId];
@@ -1368,18 +1612,37 @@ function Bidding({t,currentUser,setPage}:any){
     });
   };
 
+  const requestTaskCompletion = async (task:any) => {
+    if (!currentUser?.uid) return;
+    setActionError("");
+    try {
+      await requestCompletion({
+        taskId: task.id,
+        helperId: currentUser.uid,
+        posterId: task.posterId,
+        currentStatus: task.status,
+        taskTitle: task.title,
+      });
+    } catch (e:any) {
+      setActionError(e?.message || "Could not request completion");
+    }
+  };
+
   return(
     <div className="su" style={{padding:"20px 0",maxWidth:720}}>
       <div style={{marginBottom:24}}>
         <h2 style={{fontFamily:"Poppins",fontSize:28,fontWeight:800,color:t.text,letterSpacing:"-0.5px"}}>Task Bidding</h2>
         <p style={{color:t.sub,marginTop:5,fontSize:14}}>
-          {loading ? "Loading tasks..." : `${tasks.filter((task:any)=>!myBids[task.id]).length} active tasks accepting bids`}
+          {loading ? "Loading tasks..." : `${tasks.filter((task:any)=>task.status==="open"&&!myBids[task.id]).length} active tasks accepting bids`}
         </p>
       </div>
+      {actionError && <p style={{fontSize:12,color:t.danger,fontWeight:700,marginBottom:10}}>⚠ {actionError}</p>}
       <div style={{display:"flex",flexDirection:"column",gap:13}}>
         {tasks.map((task:any,i:number)=>{
           const open=exp===task.id,done=!!myBids[task.id];
           const bidInfo = myBids[task.id];
+          const budget = taskBudgetValue(task);
+          const isAcceptedByMe = task.acceptedBy === currentUser?.uid;
           return(
             <GCard key={task.id} t={t} className={`su${i}`} style={{overflow:"hidden",border:`1.5px solid ${open?t.primary+"50":t.border}`,transition:"border-color .2s"}}>
               <button onClick={()=>setExp(open?null:task.id)}
@@ -1390,14 +1653,14 @@ function Bidding({t,currentUser,setPage}:any){
                     <span style={{fontSize:9,fontWeight:800,color:t.primary,background:`${t.primary}15`,padding:"2px 8px",borderRadius:99}}>{task.category}</span>
                   </div>
                   <div style={{display:"flex",gap:14,flexWrap:"wrap"}}>
-                    {[{n:"pin",v:task.location},{n:"clock",v:fmtRelative(task.createdAt)},{n:"tag",v:done?"Bid placed":"Open for bids"},{n:"user",v:task.posterName || "User"}].map(x=>(
+                    {[{n:"pin",v:taskLocationLabel(task)},{n:"clock",v:fmtRelative(task.createdAt)},{n:"tag",v:done?"Bid placed":task.status==="open"?"Open for bids":"Not open"},{n:"user",v:task.posterName || "User"}].map(x=>(
                       <span key={x.v} style={{fontSize:12,color:t.muted,display:"flex",alignItems:"center",gap:4}}><I n={x.n} s={11}/>{x.v}</span>
                     ))}
                   </div>
                 </div>
                 <div style={{display:"flex",alignItems:"center",gap:14}}>
                   <div style={{textAlign:"right"}}>
-                    <div style={{fontFamily:"Poppins",fontSize:20,fontWeight:800,color:t.text}}>₹{task.budget}</div>
+                    <div style={{fontFamily:"Poppins",fontSize:20,fontWeight:800,color:t.text}}>₹{budget}</div>
                     <div style={{fontSize:10,color:t.muted}}>budget</div>
                   </div>
                   <div style={{width:28,height:28,borderRadius:8,background:t.secondary,display:"flex",alignItems:"center",justifyContent:"center",transition:"transform .2s",transform:open?"rotate(180deg)":"none"}}>
@@ -1423,7 +1686,7 @@ function Bidding({t,currentUser,setPage}:any){
                     <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 18px",borderRadius:12,background:`${t.accent}15`,border:`1px solid ${t.accent}30`}}>
                       <I n="checkC" s={18} c={t.accent}/>
                       <div>
-                        <div style={{fontSize:13,fontWeight:700,color:t.accent}}>Bid placed: ₹{bidInfo?.amount||task.budget}</div>
+                        <div style={{fontSize:13,fontWeight:700,color:t.accent}}>Bid placed: ₹{bidInfo?.amount||budget}</div>
                         <div style={{fontSize:11,color:t.muted}}>You can now chat with {task.posterName || "user"}</div>
                       </div>
                       <button className="press" onClick={()=>setPage("chat")}
@@ -1436,17 +1699,30 @@ function Bidding({t,currentUser,setPage}:any){
                       <div style={{display:"flex",gap:10}}>
                         <div style={{position:"relative",flex:1}}>
                           <span style={{position:"absolute",left:13,top:"50%",transform:"translateY(-50%)",fontSize:15,color:t.sub,fontWeight:700}}>₹</span>
-                          <input type="number" placeholder={`${task.budget}`} value={amounts[task.id]||""}
+                          <input type="number" placeholder={`${budget}`} value={amounts[task.id]||""}
                             onChange={e=>setAmounts(p=>({...p,[task.id]:e.target.value}))}
                             style={{width:"100%",padding:"11px 14px 11px 30px",borderRadius:12,background:t.input,border:`1.5px solid ${t.border}`,color:t.text,fontSize:14,outline:"none",backdropFilter:"blur(8px)"}}/>
                         </div>
-                        <button className="press" onClick={()=>placeBid(task)}
+                        <button className="press" onClick={()=>placeBid(task)} disabled={task.status!=="open"}
                           style={{padding:"11px 22px",borderRadius:12,background:`linear-gradient(135deg,${t.primary},${t.accent})`,color:"#fff",border:"none",cursor:"pointer",fontFamily:"Poppins",fontWeight:700,fontSize:14,flexShrink:0,boxShadow:`0 4px 16px ${t.primary}40`}}>
-                          Place Bid
+                          {task.status==="open"?"Place Bid":"Closed"}
                         </button>
                       </div>
                       <textarea placeholder="Add a note to your bid (optional)…" value={note[task.id]||""} onChange={e=>setNote(p=>({...p,[task.id]:e.target.value}))}
                         style={{padding:"10px 14px",borderRadius:12,background:t.input,border:`1.5px solid ${t.border}`,color:t.text,fontSize:13,outline:"none",resize:"none",height:60,backdropFilter:"blur(8px)",fontFamily:"Poppins"}}/>
+                    </div>
+                  )}
+
+                  {isAcceptedByMe && (
+                    <div style={{marginTop:12}}>
+                      <CompletionPanel
+                        status={task.status}
+                        isHelper
+                        canRequestCompletion={task.status==="accepted"||task.status==="in_progress"}
+                        canConfirmCompletion={false}
+                        onRequestCompletion={()=>requestTaskCompletion(task)}
+                        onConfirmCompletion={()=>undefined}
+                      />
                     </div>
                   )}
                 </div>
@@ -1652,7 +1928,7 @@ function Profile({t,user,online,setOnline}:any){
                 {online?"● Online":"● Busy"}
               </span>
               <span style={{padding:"3px 11px",borderRadius:99,fontSize:11,fontWeight:700,background:`${t.primary}15`,color:t.primary,border:`1px solid ${t.primary}30`}}>
-                {user.role==="helper"?"⚡ Helper":"👤 User"}
+                {user.role==="helper"?"⚡ Helper":user.role==="both"?"⚡ Both":"👤 Requester"}
               </span>
             </div>
             {user.bio&&<p style={{fontSize:13,color:t.sub,lineHeight:1.6,marginBottom:12,fontStyle:"italic"}}>"{user.bio}"</p>}
@@ -1750,6 +2026,26 @@ function Profile({t,user,online,setOnline}:any){
   );
 }
 
+function NotificationsPage({t,currentUser,notifications,onMarkRead}:any){
+  return(
+    <div className="su" style={{padding:"20px 0",maxWidth:860}}>
+      <div style={{marginBottom:18}}>
+        <h2 style={{fontFamily:"Poppins",fontSize:28,fontWeight:800,color:t.text,letterSpacing:"-0.5px"}}>Notifications</h2>
+        <p style={{color:t.sub,marginTop:5,fontSize:14}}>Latest workflow and moderation events for your account.</p>
+      </div>
+      <GCard t={t} style={{padding:"14px"}}>
+        <NotificationsPanel
+          notifications={(notifications || []).map((n:any)=>(
+            { id:n.id, title:n.title, body:n.body, read:Boolean(n.read) }
+          ))}
+          onMarkRead={onMarkRead}
+        />
+      </GCard>
+      {!currentUser?.uid && <p style={{fontSize:12,color:t.muted,marginTop:12}}>Sign in to view your notifications.</p>}
+    </div>
+  );
+}
+
 /* ═══════════════════════════════════════════════════════
    APP ROOT
 ═══════════════════════════════════════════════════════ */
@@ -1760,6 +2056,7 @@ export default function App(){
   const [page,setPage]=useState(authUser ? "dashboard" : "login");
   const [online,setOnline]=useState(true);
   const [postedTasks,setPostedTasks]=useState<any[]>([]);
+  const [notifications,setNotifications]=useState<any[]>([]);
   const [wide,setWide]=useState(typeof window!=="undefined"&&window.innerWidth>=860);
 
   useEffect(()=>{
@@ -1768,20 +2065,39 @@ export default function App(){
     return()=>window.removeEventListener("resize",h);
   },[]);
 
-  const getLandingPage = useCallback((role?: string) => {
+  const getLandingPage = useCallback((role?: string, currentProfile?: any) => {
+    if (!isProfileComplete(currentProfile)) return "login";
     return role === "helper" ? "bidding" : "dashboard";
   }, []);
+
+  useEffect(()=>{
+    if(!authUser?.uid){
+      setPostedTasks([]);
+      return;
+    }
+    const unsub = watchMyPostedTasks(authUser.uid, setPostedTasks);
+    return ()=>unsub();
+  },[authUser?.uid]);
+
+  useEffect(()=>{
+    if(!authUser?.uid){
+      setNotifications([]);
+      return;
+    }
+    const unsub = getMyNotifications(authUser.uid, setNotifications);
+    return ()=>unsub();
+  },[authUser?.uid]);
 
   // Auto-navigate based on auth state
   useEffect(()=>{
     if(!authLoading){
       if(authUser && page==="login"){
-        setPage(getLandingPage(profile?.role));
+        setPage(getLandingPage(profile?.role, profile));
       } else if(!authUser && page!=="login"){
         setPage("login");
       }
     }
-  },[authUser, authLoading, page, profile?.role, getLandingPage]);
+  },[authUser, authLoading, page, profile, profile?.role, getLandingPage]);
 
   const t=(TH as any)[dark?"dark":"light"];
   const loggedIn=page!=="login" && !!authUser;
@@ -1795,26 +2111,27 @@ export default function App(){
     address: profile?.address || "",
     bio: profile?.bio || "",
     interests: profile?.interests || [],
-    role: profile?.role || "user",
+    role: profile?.role || "requester",
     joinedDate: profile?.joinedDate || new Date().toLocaleDateString("en-IN",{day:"numeric",month:"long",year:"numeric"}),
     joinedFull: profile?.joinedFull || authUser.metadata.creationTime || new Date().toISOString(),
     rating: 0,
+    helperMeta: profile?.helperMeta,
+    stats: profile?.stats,
   } : null;
 
   const login=useCallback(()=>{
-    setPage(getLandingPage(profile?.role));
-  },[getLandingPage, profile?.role]);
+    setPage(getLandingPage(profile?.role, profile));
+  },[getLandingPage, profile, profile?.role]);
 
-  const onPostTask=useCallback((task:any)=>{
-    setPostedTasks(prev=>[{id:`task-${Date.now()}`,...task},...prev]);
-  },[]);
-  const onRemoveTask=useCallback((taskId:string)=>{
-    setPostedTasks(prev=>prev.filter(task=>task.id!==taskId));
-  },[]);
   const handleSignOut = useCallback(async () => {
     await signOut();
     setPage("login");
   }, [signOut]);
+  const unreadCount = notifications.filter((item:any)=>!item.read).length;
+
+  const markRead = async (notificationId:string) => {
+    await markNotificationRead(notificationId);
+  };
 
   if(authLoading) return (
     <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:t.bgGrad,color:t.text}}>
@@ -1835,22 +2152,23 @@ export default function App(){
       {loggedIn&&wide&&(
         <Sidebar page={page} setPage={setPage} t={t} isDark={dark}
           toggleTheme={()=>setDark(v=>!v)} online={online}
-          setOnline={setOnline} user={userForUI}/>
+          setOnline={setOnline} user={userForUI} unreadCount={unreadCount}/>
       )}
 
       <main style={{flex:1,position:"relative",zIndex:1,overflowY:"auto",paddingBottom:loggedIn&&!wide?80:0,minHeight:"100vh"}}>
         {loggedIn&&(
           <div style={{padding:"0 24px"}}>
-            <TopBar t={t} user={userForUI} online={online} setOnline={setOnline} setPage={setPage} onSignOut={handleSignOut}/>
+            <TopBar t={t} user={userForUI} online={online} setOnline={setOnline} setPage={setPage} onSignOut={handleSignOut} unreadCount={unreadCount}/>
           </div>
         )}
         <div style={{padding:loggedIn?"0 24px":0}}>
           {page==="login"    &&<LoginPage onLogin={login} t={t} isDark={dark} toggleTheme={()=>setDark(v=>!v)}/>}
-          {page==="dashboard"&&<Dashboard t={t} user={userForUI} setPage={setPage}/>}
+          {page==="dashboard"&&<Dashboard t={t} user={userForUI} setPage={setPage} postedTasks={postedTasks} currentUid={authUser?.uid}/>}
           {page==="post-task"&&<PostTask t={t} setPage={setPage} currentUser={{uid: authUser?.uid, ...userForUI}}/>}
           {page==="discover" &&<Discover t={t} currentUser={{uid: authUser?.uid, ...userForUI}}/>}
           {page==="bidding"  &&<Bidding t={t} currentUser={{uid: authUser?.uid, ...userForUI}} setPage={setPage}/>}
           {page==="chat"     &&<Chat t={t} currentUser={{uid: authUser?.uid, ...userForUI}}/>}
+          {page==="notifications"&&<NotificationsPage t={t} currentUser={{uid: authUser?.uid, ...userForUI}} notifications={notifications} onMarkRead={markRead}/>}
           {page==="profile"  &&<Profile t={t} user={userForUI} online={online} setOnline={setOnline}/>}
         </div>
       </main>
