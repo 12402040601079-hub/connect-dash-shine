@@ -1,5 +1,6 @@
 type BidItem = {
   id: string;
+  taskId: string;
   helperName: string;
   amount: number;
   note?: string;
@@ -10,7 +11,7 @@ type BidListProps = {
   bids: BidItem[];
   onAccept: (bidId: string) => void;
   onReject?: (bidId: string) => void;
-  onCounter?: (bidId: string) => void;
+  onCounter?: (bid: BidItem) => void;
 };
 
 export default function BidList({ bids, onAccept, onReject, onCounter }: BidListProps) {
@@ -32,7 +33,7 @@ export default function BidList({ bids, onAccept, onReject, onCounter }: BidList
               {bid.status === "pending" && (
                 <div style={{ marginTop: 6, display: "flex", gap: 6, justifyContent: "flex-end" }}>
                   <button
-                    onClick={() => onCounter?.(bid.id)}
+                    onClick={() => onCounter?.(bid)}
                     style={{ border: "1px solid #2563eb", borderRadius: 8, background: "#eff6ff", color: "#2563eb", cursor: "pointer", fontSize: 12, padding: "5px 8px" }}
                   >
                     Counter

@@ -145,21 +145,31 @@ export async function counterBid(
   amount: number,
   note: string,
   fromHelper?: boolean,
+  expectedTaskId?: string,
 ): Promise<void> {
   if (!firestore) {
     throw new Error("Firestore is not configured");
   }
 
-  await updateDoc(doc(firestore, "bids", bidId), {
+  const bidRef = doc(firestore, "bids", bidId);
+  const snap = await getDoc(bidRef);
+  const row = snap.data() as BidDoc | undefined;
+  if (!row) {
+    throw new Error("Bid not found");
+  }
+
+  // Guard counter-offers against task drift by validating the original task id.
+  if (expectedTaskId && row.taskId !== expectedTaskId) {
+    throw new Error("Counter offer task mismatch");
+  }
+
+  await updateDoc(bidRef, {
+    taskId: row.taskId,
     amount,
     note,
     status: "pending",
     updatedAt: serverTimestamp(),
   });
-
-  const bidRef = doc(firestore, "bids", bidId);
-  const snap = await getDoc(bidRef);
-  const row = snap.data() as BidDoc | undefined;
   
   if (fromHelper && row?.posterId) {
     // Helper countering back to user

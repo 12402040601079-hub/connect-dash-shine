@@ -1078,7 +1078,7 @@ function Dashboard({t,user,setPage,postedTasks,currentUid,focusTab,onFocusTabHan
     }
   };
 
-  const handleCounterBid = async (bidId:string, fromHelper?: boolean) => {
+  const handleCounterBid = async (bid:any, fromHelper?: boolean) => {
     const raw = window.prompt("Enter counter amount (INR)");
     if (!raw) return;
     const amount = Number(raw);
@@ -1086,9 +1086,13 @@ function Dashboard({t,user,setPage,postedTasks,currentUid,focusTab,onFocusTabHan
       setDashError("Please enter a valid counter amount");
       return;
     }
+    if (!bid?.id || !bid?.taskId) {
+      setDashError("Invalid bid reference for counter offer");
+      return;
+    }
     setDashError("");
     try {
-      await counterBid(bidId, amount, `Counter offer: INR ${amount}`, fromHelper);
+      await counterBid(bid.id, amount, `Counter offer: INR ${amount}`, fromHelper, bid.taskId);
     } catch (e:any) {
       setDashError(e?.message || "Failed to send counter bid");
     }
@@ -1324,7 +1328,7 @@ function Dashboard({t,user,setPage,postedTasks,currentUid,focusTab,onFocusTabHan
                 <span style={{fontSize:10,fontWeight:700,color:t.primary,textTransform:"uppercase"}}>{task.status}</span>
               </div>
               <BidList
-                bids={(bidsByTask?.[task.id] || []).map((bid:any)=>({ id: bid.id, helperName: bid.helperName, amount: bid.amount, note: bid.note, status: bid.status }))}
+                bids={(bidsByTask?.[task.id] || []).map((bid:any)=>({ id: bid.id, taskId: bid.taskId, helperName: bid.helperName, amount: bid.amount, note: bid.note, status: bid.status }))}
                 onAccept={(bidId)=>handleAcceptBid(task,bidId)}
                 onReject={handleRejectBid}
                 onCounter={handleCounterBid}
@@ -1354,7 +1358,7 @@ function Dashboard({t,user,setPage,postedTasks,currentUid,focusTab,onFocusTabHan
                       style={{padding:"7px 11px",borderRadius:10,background:`${t.accent}18`,color:t.accent,border:`1px solid ${t.accent}35`,fontSize:11,fontWeight:700,cursor:"pointer"}}>
                       Accept
                     </button>
-                    <button className="press" onClick={()=>handleCounterBid(bid.id, true)}
+                    <button className="press" onClick={()=>handleCounterBid(bid, true)}
                       style={{padding:"7px 11px",borderRadius:10,background:t.secondary,color:t.text,border:`1px solid ${t.border}`,fontSize:11,fontWeight:700,cursor:"pointer"}}>
                       Counter
                     </button>
@@ -1446,8 +1450,8 @@ function Dashboard({t,user,setPage,postedTasks,currentUid,focusTab,onFocusTabHan
       />
 
       {paymentTask && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.28)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:120,padding:16}}>
-          <GCard t={t} style={{width:"min(94vw,520px)",padding:"18px 18px"}}>
+        <div style={{position:"fixed",inset:0,display:"flex",alignItems:"center",justifyContent:"center",zIndex:120,padding:16,background:t.mode==="dark"?"rgba(6,6,16,0.62)":"rgba(16,20,32,0.34)",backdropFilter:"blur(8px) saturate(120%)",WebkitBackdropFilter:"blur(8px) saturate(120%)",isolation:"isolate"}}>
+          <GCard t={t} style={{width:"min(94vw,520px)",padding:"18px 18px",background:t.mode==="dark"?"rgba(13,10,31,0.96)":"rgba(255,255,255,0.97)",border:`1px solid ${t.borderStrong || t.border}`,boxShadow:"0 24px 60px rgba(0,0,0,0.34)",backdropFilter:"none",WebkitBackdropFilter:"none"}}>
             <h4 style={{fontSize:18,fontWeight:800,color:t.text,marginBottom:8}}>Dummy Payment Module</h4>
             <p style={{fontSize:12,color:t.muted,marginBottom:12}}>Task: {paymentTask.title}</p>
             <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
