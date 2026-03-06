@@ -339,7 +339,7 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
     if(!socialIncomplete) return;
     setMode("register");
     setStep(2);
-    setRole(null);
+    setRole(isAppRole(profile?.role) ? profile.role : null);
     setForm((prev:any)=>({
       ...prev,
       name: profile?.name || user?.displayName || prev.name || "",
@@ -369,9 +369,13 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
   },[form.password,t]);
 
   const pct=useMemo(()=>{
-    const f=[form.name,form.age,form.gender,form.address,form.email,form.phone,form.password];
-    return Math.round(((f.filter(x=>x.length>0).length+(form.interests.length>0?1:0))/8)*100);
-  },[form]);
+    const fields = socialIncomplete
+      ? [form.name,form.age,form.gender,form.address,form.email,form.phone]
+      : [form.name,form.age,form.gender,form.address,form.email,form.phone,form.password];
+    const total = fields.length + 1;
+    const done = fields.filter((x:any)=>String(x || "").length>0).length + (form.interests.length>0?1:0);
+    return Math.round((done/total)*100);
+  },[form, socialIncomplete]);
 
   const validate=()=>{
     const e:any={};
@@ -540,6 +544,36 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
         </div>
 
         {err.role && <p style={{fontSize:12,color:t.danger,fontWeight:700,marginBottom:10}}>⚠ {err.role}</p>}
+
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
+          {[
+            { id: "requester", label: "Requester", color: t.primary },
+            { id: "helper", label: "Helper", color: t.accent },
+            { id: "both", label: "Both", color: "#3b82f6" },
+          ].map((opt:any)=>{
+            const active = role === opt.id;
+            return (
+              <button
+                key={opt.id}
+                className="press"
+                type="button"
+                onClick={()=>{setRole(opt.id);setErr((p:any)=>({...p,role:""}));}}
+                style={{
+                  padding:"7px 13px",
+                  borderRadius:99,
+                  border:`1.5px solid ${active ? opt.color+"66" : t.border}`,
+                  background:active ? `${opt.color}1c` : t.secondary,
+                  color:active ? opt.color : t.muted,
+                  fontSize:12,
+                  fontWeight:700,
+                  cursor:"pointer",
+                }}
+              >
+                {active ? "✓ " : ""}{opt.label}
+              </button>
+            );
+          })}
+        </div>
 
         {/* Progress bar */}
         <div style={{marginBottom:22}}>
@@ -764,6 +798,15 @@ function RoleCard({title,desc,ic,col,grad,feats,t,onClick}:any){
     </button>
   );
 }
+
+const isAppRole = (role:any) => role === "requester" || role === "helper" || role === "both";
+
+const isAdminProfile = (profile:any) => {
+  if (!profile) return false;
+  if (profile?.isAdmin === true) return true;
+  if (profile?.role === "admin") return true;
+  return false;
+};
 
 /* ═══════════════════════════════════════════════════════
    LAYOUT CHROME
@@ -2066,6 +2109,7 @@ export default function App(){
   },[]);
 
   const getLandingPage = useCallback((role?: string, currentProfile?: any) => {
+    if (isAdminProfile(currentProfile)) return "admin";
     if (!isProfileComplete(currentProfile)) return "login";
     return role === "helper" ? "bidding" : "dashboard";
   }, []);
@@ -2092,7 +2136,12 @@ export default function App(){
   useEffect(()=>{
     if(!authLoading){
       if(authUser && page==="login"){
-        setPage(getLandingPage(profile?.role, profile));
+        const nextPage = getLandingPage(profile?.role, profile);
+        if (nextPage === "admin") {
+          window.location.assign("/super-admin");
+          return;
+        }
+        setPage(nextPage);
       } else if(!authUser && page!=="login"){
         setPage("login");
       }
@@ -2120,7 +2169,12 @@ export default function App(){
   } : null;
 
   const login=useCallback(()=>{
-    setPage(getLandingPage(profile?.role, profile));
+    const nextPage = getLandingPage(profile?.role, profile);
+    if (nextPage === "admin") {
+      window.location.assign("/super-admin");
+      return;
+    }
+    setPage(nextPage);
   },[getLandingPage, profile, profile?.role]);
 
   const handleSignOut = useCallback(async () => {
