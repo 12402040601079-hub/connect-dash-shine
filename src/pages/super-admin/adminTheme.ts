@@ -22,14 +22,11 @@ export const AT = {
 
 export type AdminTheme = typeof AT;
 
-// Shared glass-card style
-export const GLASS_CARD: React.CSSProperties = {
+// Shared glass-card style — keyed as a plain object, cast where needed
+export const GLASS_CARD = {
   background: AT.card,
   border: `1px solid ${AT.border}`,
   backdropFilter: "blur(16px) saturate(180%)",
   WebkitBackdropFilter: "blur(16px) saturate(180%)",
   borderRadius: 16,
-};
-
-// Needed to satisfy TS with CSSProperties
-import type React from "react";
+} as const;
