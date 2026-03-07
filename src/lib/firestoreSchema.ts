@@ -100,6 +100,10 @@ export type BidDoc = {
   amount: number;
   note: string;
   status: BidStatus;
+  /** Tracks who made the last move so each party only sees Accept when it's their turn. */
+  lastMovedBy?: "helper" | "poster";
+  /** True after helper agrees to user's counter — task starts only when user does the final Accept. */
+  helperAcceptedCounter?: boolean;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 };

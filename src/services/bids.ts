@@ -41,6 +41,8 @@ export async function placeBid(input: PlaceBidInput): Promise<string> {
       amount: input.amount,
       note: input.note,
       status: "pending",
+      lastMovedBy: "helper",
+      helperAcceptedCounter: false,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     },
@@ -168,6 +170,8 @@ export async function counterBid(
     amount,
     note,
     status: "pending",
+    lastMovedBy: fromHelper ? "helper" : "poster",
+    helperAcceptedCounter: false,
     updatedAt: serverTimestamp(),
   });
   
@@ -188,4 +192,34 @@ export async function counterBid(
       ref: { taskId: row.taskId, bidId },
     });
   }
+}
+
+/**
+ * Helper agrees to the user's counter-offer without immediately starting the task.
+ * Sets helperAcceptedCounter:true so the user gets a final Accept/Reject prompt.
+ */
+export async function helperAcceptCounter(
+  bidId: string,
+  amount: number,
+  helperName: string,
+  taskId: string,
+  posterId: string,
+): Promise<void> {
+  if (!firestore) {
+    throw new Error("Firestore is not configured");
+  }
+
+  const bidRef = doc(firestore, "bids", bidId);
+  await updateDoc(bidRef, {
+    lastMovedBy: "helper",
+    helperAcceptedCounter: true,
+    updatedAt: serverTimestamp(),
+  });
+
+  await notify(posterId, {
+    type: "bid_countered",
+    title: "Helper accepted your counter offer!",
+    body: `${helperName} agreed to INR ${amount}. Please confirm to start the task.`,
+    ref: { taskId, bidId },
+  });
 }

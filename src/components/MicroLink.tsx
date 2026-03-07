@@ -23,7 +23,7 @@ import {
   requestCompletion,
   watchMyPostedTasks,
 } from "@/services/tasks";
-import { counterBid, placeBid as placeTaskBid, updateBidStatus, watchHelperBids } from "@/services/bids";
+import { counterBid, helperAcceptCounter, placeBid as placeTaskBid, updateBidStatus, watchHelperBids } from "@/services/bids";
 import { getMyNotifications, markNotificationRead, notify } from "@/services/notifications";
 import { submitRating } from "@/services/ratings";
 import { rankHelpersForTask, distanceKm } from "@/lib/matching";
@@ -1116,28 +1116,17 @@ function Dashboard({t,user,setPage,postedTasks,currentUid,focusTab,onFocusTabHan
   };
 
   const handleHelperAcceptCounterBid = async (bid: any) => {
-    // Helper accepts user's counter-offer - this means the task is accepted
+    // Helper agrees to user's counter — does NOT start task; loops back to user for final confirmation
     setDashError("");
     try {
-      // Get the task details
-      if (!firestore) throw new Error("Firestore not configured");
-      const taskRef = doc(firestore, "tasks", bid.taskId);
-      const taskSnap = await getDoc(taskRef);
-      const task = taskSnap.data();
-      if (!task) throw new Error("Task not found");
-
-      // Accept the bid and task
-      await acceptTaskBid({
-        taskId: bid.taskId,
-        bidId: bid.id,
-        helperId: currentUid,
-        posterId: bid.posterId,
-        taskTitle: task.title || "Task",
-        currentStatus: task.status,
-      });
-
-      // Switch to orders tab to show payment
-      setDashboardTab("orders");
+      if (!bid?.posterId) throw new Error("Bid is missing poster reference");
+      await helperAcceptCounter(
+        bid.id,
+        bid.amount,
+        bid.helperName || "Helper",
+        bid.taskId,
+        bid.posterId,
+      );
     } catch(err) {
       const msg = (err as Error).message || String(err);
       setDashError(msg);
@@ -1190,7 +1179,7 @@ function Dashboard({t,user,setPage,postedTasks,currentUid,focusTab,onFocusTabHan
 
   const handlePayment = async () => {
     if(!paymentTask || !currentUid || !paymentTask.acceptedBy) return;
-    if (!(["accepted", "in_progress"].includes(paymentTask.status))) {
+    if (["open", "cancelled", "closed"].includes(paymentTask.status)) {
       setDashError("Task is not ready for payment");
       setPaymentTask(null);
       return;
@@ -1349,7 +1338,7 @@ function Dashboard({t,user,setPage,postedTasks,currentUid,focusTab,onFocusTabHan
                 <span style={{fontSize:10,fontWeight:700,color:t.primary,textTransform:"uppercase"}}>{task.status}</span>
               </div>
               <BidList
-                bids={(bidsByTask?.[task.id] || []).map((bid:any)=>({ id: bid.id, taskId: bid.taskId, helperName: bid.helperName, amount: bid.amount, note: bid.note, status: bid.status }))}
+                bids={(bidsByTask?.[task.id] || []).map((bid:any)=>({ id: bid.id, taskId: bid.taskId, helperName: bid.helperName, amount: bid.amount, note: bid.note, status: bid.status, lastMovedBy: bid.lastMovedBy, helperAcceptedCounter: bid.helperAcceptedCounter }))}
                 onAccept={(bidId)=>handleAcceptBid(task,bidId)}
                 onReject={handleRejectBid}
                 onCounter={handleCounterBid}
@@ -1375,10 +1364,17 @@ function Dashboard({t,user,setPage,postedTasks,currentUid,focusTab,onFocusTabHan
                 </div>
                 {bid.status==="pending" && (
                   <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                    <button className="press" onClick={()=>handleHelperAcceptCounterBid(bid)}
-                      style={{padding:"7px 11px",borderRadius:10,background:`${t.accent}18`,color:t.accent,border:`1px solid ${t.accent}35`,fontSize:11,fontWeight:700,cursor:"pointer"}}>
-                      Accept
-                    </button>
+                    {/* Accept only when user (poster) has made the last counter offer */}
+                    {bid.lastMovedBy==="poster" && (
+                      <button className="press" onClick={()=>handleHelperAcceptCounterBid(bid)}
+                        style={{padding:"7px 11px",borderRadius:10,background:`${t.accent}18`,color:t.accent,border:`1px solid ${t.accent}35`,fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                        Accept Counter
+                      </button>
+                    )}
+                    {/* Show "Waiting…" label when this is the helper's own initial/counter bid awaiting user response */}
+                    {(bid.lastMovedBy==="helper" || bid.lastMovedBy==null) && (
+                      <span style={{fontSize:11,color:t.muted,fontWeight:600,alignSelf:"center"}}>Awaiting user…</span>
+                    )}
                     <button className="press" onClick={()=>handleCounterBid(bid, true)}
                       style={{padding:"7px 11px",borderRadius:10,background:t.secondary,color:t.text,border:`1px solid ${t.border}`,fontSize:11,fontWeight:700,cursor:"pointer"}}>
                       Counter
@@ -1412,7 +1408,7 @@ function Dashboard({t,user,setPage,postedTasks,currentUid,focusTab,onFocusTabHan
                   <span style={{fontSize:10,fontWeight:700,padding:"4px 8px",borderRadius:99,border:`1px solid ${task.paymentStatus==="paid"?t.accent+"50":t.border}`,background:task.paymentStatus==="paid"?`${t.accent}16`:t.secondary,color:task.paymentStatus==="paid"?t.accent:t.muted}}>
                     {task.paymentStatus==="paid"?"Payment Success":"Payment Pending"}
                   </span>
-                  {user?.role==="user" && task.paymentStatus!=="paid" && ["accepted", "in_progress"].includes(task.status) && (
+                  {user?.role==="user" && task.paymentStatus!=="paid" && !["open","cancelled","closed"].includes(task.status) && (
                     <button className="press" onClick={()=>setPaymentTask(task)}
                       style={{padding:"7px 11px",borderRadius:10,background:`linear-gradient(135deg,${t.primary},${t.accent})`,color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer"}}>
                       Pay Now
@@ -2876,7 +2872,7 @@ export default function App(){
   const getLandingPage = useCallback((role?: string, currentProfile?: any) => {
     if (isAdminProfile(currentProfile)) return "admin";
     if (!isProfileComplete(currentProfile)) return "login";
-    return role === "helper" ? "requests" : "dashboard";
+    return "dashboard";
   }, []);
 
   useEffect(()=>{

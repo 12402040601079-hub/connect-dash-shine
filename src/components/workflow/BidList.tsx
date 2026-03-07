@@ -5,6 +5,8 @@ type BidItem = {
   amount: number;
   note?: string;
   status: string;
+  lastMovedBy?: "helper" | "poster";
+  helperAcceptedCounter?: boolean;
 };
 
 type BidListProps = {
@@ -31,25 +33,56 @@ export default function BidList({ bids, onAccept, onReject, onCounter }: BidList
             <div style={{ textAlign: "right" }}>
               <div style={{ fontWeight: 800 }}>INR {bid.amount}</div>
               {bid.status === "pending" && (
-                <div style={{ marginTop: 6, display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                  <button
-                    onClick={() => onCounter?.(bid)}
-                    style={{ border: "1px solid #2563eb", borderRadius: 8, background: "#eff6ff", color: "#2563eb", cursor: "pointer", fontSize: 12, padding: "5px 8px" }}
-                  >
-                    Counter
-                  </button>
-                  <button
-                    onClick={() => onReject?.(bid.id)}
-                    style={{ border: "1px solid #dc2626", borderRadius: 8, background: "#fef2f2", color: "#dc2626", cursor: "pointer", fontSize: 12, padding: "5px 8px" }}
-                  >
-                    Reject
-                  </button>
-                  <button
-                    onClick={() => onAccept(bid.id)}
-                    style={{ border: "none", borderRadius: 8, background: "#0f766e", color: "#fff", cursor: "pointer", fontSize: 12, padding: "5px 8px" }}
-                  >
-                    Accept
-                  </button>
+                <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
+                  {bid.lastMovedBy === "poster" ? (
+                    /* User just counter-bid — waiting for helper to respond */
+                    <span style={{ fontSize: 11, color: "#9333ea", fontWeight: 700 }}>
+                      Your counter sent ✓ — awaiting helper response
+                    </span>
+                  ) : bid.helperAcceptedCounter ? (
+                    /* Helper agreed to user's counter — user must confirm to start task */
+                    <>
+                      <span style={{ fontSize: 11, color: "#059669", fontWeight: 700 }}>
+                        ✓ Helper agreed to INR {bid.amount}. Confirm to start task?
+                      </span>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button
+                          onClick={() => onReject?.(bid.id)}
+                          style={{ border: "1px solid #dc2626", borderRadius: 8, background: "#fef2f2", color: "#dc2626", cursor: "pointer", fontSize: 12, padding: "5px 8px" }}
+                        >
+                          Reject
+                        </button>
+                        <button
+                          onClick={() => onAccept(bid.id)}
+                          style={{ border: "none", borderRadius: 8, background: "#0f766e", color: "#fff", cursor: "pointer", fontSize: 12, padding: "5px 8px", fontWeight: 700 }}
+                        >
+                          Confirm &amp; Accept
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    /* Normal flow — helper's initial bid or counter-bid, user has all 3 options */
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button
+                        onClick={() => onCounter?.(bid)}
+                        style={{ border: "1px solid #2563eb", borderRadius: 8, background: "#eff6ff", color: "#2563eb", cursor: "pointer", fontSize: 12, padding: "5px 8px" }}
+                      >
+                        Counter
+                      </button>
+                      <button
+                        onClick={() => onReject?.(bid.id)}
+                        style={{ border: "1px solid #dc2626", borderRadius: 8, background: "#fef2f2", color: "#dc2626", cursor: "pointer", fontSize: 12, padding: "5px 8px" }}
+                      >
+                        Reject
+                      </button>
+                      <button
+                        onClick={() => onAccept(bid.id)}
+                        style={{ border: "none", borderRadius: 8, background: "#0f766e", color: "#fff", cursor: "pointer", fontSize: 12, padding: "5px 8px" }}
+                      >
+                        Accept
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

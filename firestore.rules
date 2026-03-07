@@ -67,10 +67,14 @@ service cloud.firestore {
       return isTaskPoster(resource.data) &&
         resource.data.acceptedBy is string &&
         resource.data.paymentStatus in ['pending', null] &&
-        resource.data.status in ['accepted', 'in_progress'] &&
+        resource.data.status in ['accepted', 'in_progress', 'completion_requested', 'completed'] &&
         request.resource.data.paymentStatus == 'paid' &&
         request.resource.data.paymentMethod in ['upi_qr', 'card', 'netbanking'] &&
-        request.resource.data.status == 'in_progress';
+        // Preserve status unless upgrading from accepted → in_progress
+        (
+          request.resource.data.status == resource.data.status ||
+          (resource.data.status == 'accepted' && request.resource.data.status == 'in_progress')
+        );
     }
 
     function isParticipant(conversationId) {
@@ -90,8 +94,16 @@ service cloud.firestore {
       allow read: if signedIn();
       allow create: if signedIn() && request.auth.uid == userId && validProfileRole(request.resource.data.role);
       allow update: if signedIn() &&
-        (request.auth.uid == userId || isAdmin()) &&
-        (!request.resource.data.keys().hasAny(['role']) || validProfileRole(request.resource.data.role));
+        (
+          // Profile owner or admin can change any field (role must stay valid)
+          (request.auth.uid == userId || isAdmin()) &&
+          (!request.resource.data.keys().hasAny(['role']) || validProfileRole(request.resource.data.role))
+        ) ||
+        (
+          // Any signed-in user may update only the stats map (rating/completion aggregation)
+          signedIn() &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stats'])
+        );
       allow delete: if false;
     }
 

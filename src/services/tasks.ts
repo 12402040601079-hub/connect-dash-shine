@@ -262,7 +262,7 @@ export async function markTaskPaid(args: {
     throw new Error("Task not found");
   }
 
-  if (!["accepted", "in_progress"].includes(liveTask.status)) {
+  if (["open", "cancelled", "closed"].includes(liveTask.status)) {
     throw new Error("Task is still syncing acceptance. Please retry payment in a few seconds.");
   }
 
@@ -270,12 +270,15 @@ export async function markTaskPaid(args: {
     return;
   }
 
+  // Preserve status for completion-stage tasks; only advance to in_progress from accepted.
+  const statusesToPreserve = ["in_progress", "completion_requested", "completed"];
+  const nextStatus = statusesToPreserve.includes(liveTask.status) ? liveTask.status : "in_progress";
+
   await updateDoc(taskRef, {
     paymentStatus: "paid",
     paymentMethod: args.method,
     paymentCompletedAt: serverTimestamp(),
-    // Payment unlocks helper controls automatically.
-    status: "in_progress",
+    status: nextStatus,
     updatedAt: serverTimestamp(),
   });
 

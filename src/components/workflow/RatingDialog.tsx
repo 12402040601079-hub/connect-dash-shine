@@ -15,8 +15,33 @@ export default function RatingDialog({ open, helperName, submitting, onClose, on
   if (!open) return null;
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, backdropFilter: "none", WebkitBackdropFilter: "none" }}>
-      <div style={{ width: "min(94vw, 460px)", background: "#fff", color: "#111", borderRadius: 16, padding: 18, backdropFilter: "none", WebkitBackdropFilter: "none" }}>
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(6,6,16,0.62)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 130,
+        isolation: "isolate",
+        backdropFilter: "none",
+        WebkitBackdropFilter: "none",
+      }}
+    >
+      <div
+        style={{
+          width: "min(94vw, 460px)",
+          background: "#ffffff",
+          color: "#111",
+          borderRadius: 16,
+          padding: 18,
+          boxShadow: "0 24px 60px rgba(0,0,0,0.34)",
+          isolation: "isolate",
+          backdropFilter: "none",
+          WebkitBackdropFilter: "none",
+        }}
+      >
         <h3 style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>Rate {helperName}</h3>
         <p style={{ fontSize: 13, color: "#555", marginBottom: 14 }}>Your review helps build trust in the community.</p>
 
@@ -45,7 +70,7 @@ export default function RatingDialog({ open, helperName, submitting, onClose, on
           onChange={(e) => setReview(e.target.value)}
           rows={4}
           placeholder="Share a short review"
-          style={{ width: "100%", border: "1px solid #ddd", borderRadius: 10, padding: 10, resize: "vertical", marginBottom: 14 }}
+          style={{ width: "100%", border: "1px solid #ddd", borderRadius: 10, padding: 10, resize: "vertical", marginBottom: 14, boxSizing: "border-box" }}
         />
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
