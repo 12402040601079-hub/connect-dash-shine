@@ -65,3 +65,12 @@ export async function markNotificationRead(notificationId: string): Promise<void
     read: true,
   });
 }
+
+export async function markAllNotificationsRead(notificationIds: string[]): Promise<void> {
+  if (!firestore || notificationIds.length === 0) return;
+  await Promise.all(
+    notificationIds.map((id) =>
+      updateDoc(doc(firestore!, "notifications", id), { read: true }).catch(() => undefined)
+    )
+  );
+}

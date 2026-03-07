@@ -1,4 +1,6 @@
 import React, { useState } from "react";
+import { signOut } from "firebase/auth";
+import { firebaseAuth } from "@/integrations/firebase/client";
 import AdminLayout from "./AdminLayout";
 import Dashboard from "./Dashboard";
 import Users from "./Users";
@@ -23,8 +25,13 @@ const VIEWS = {
 export default function SuperAdminApp() {
   const [view, setView] = useState<string>(VIEWS.dashboard);
 
+  const handleSignOut = async () => {
+    try { if (firebaseAuth) await signOut(firebaseAuth); } catch {}
+    window.location.href = "/";
+  };
+
   return (
-    <AdminLayout active={view} onNav={(id) => setView(id)}>
+    <AdminLayout active={view} onNav={(id) => setView(id)} onSignOut={handleSignOut}>
       {view === VIEWS.dashboard && <Dashboard />}
       {view === VIEWS.moderation && <Moderation />}
       {view === VIEWS.trustSafety && <TrustSafety />}

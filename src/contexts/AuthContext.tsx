@@ -63,6 +63,13 @@ type Profile = {
   };
   onboardingComplete?: boolean;
   authProvider?: "password" | "google" | "apple" | "unknown";
+  paymentDetails?: {
+    upiId?: string;
+    accountHolderName?: string;
+    accountNumber?: string;
+    ifscCode?: string;
+    bankName?: string;
+  };
 };
 
 type AuthContextType = {

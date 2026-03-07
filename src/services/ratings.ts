@@ -89,30 +89,18 @@ async function cleanupTaskSessionAfterMutualRatings(taskId: string): Promise<voi
 
   const conversationSnap = await getDocs(query(collection(firestore, "conversations"), where("taskId", "==", taskId)));
 
-  // Stage a visible closing state first so both participants see why chat disappears.
+  // Lock the chat permanently — preserve all message history but disable new messages.
   await Promise.all(
     conversationSnap.docs.map((conversationDoc) =>
       updateDoc(conversationDoc.ref, {
-        sessionStatus: "closing",
+        sessionStatus: "closed",
         sessionCloseReason: "mutual_ratings",
-        lastMessage: "Session closed after mutual ratings",
-        lastMessageAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       }).catch(() => undefined),
     ),
   );
 
-  // Give clients a short window to render the closing label before deletion.
-  await new Promise((resolve) => setTimeout(resolve, 3000));
-
-  await Promise.all(
-    conversationSnap.docs.map(async (conversationDoc) => {
-      const messagesSnap = await getDocs(collection(firestore, "conversations", conversationDoc.id, "messages"));
-      await Promise.all(messagesSnap.docs.map((msg) => deleteDoc(msg.ref).catch(() => undefined)));
-      await deleteDoc(conversationDoc.ref).catch(() => undefined);
-    }),
-  );
-
+  // Clean up all task-related notifications so inboxes stay clear.
   const notificationSnap = await getDocs(query(collection(firestore, "notifications"), where("ref.taskId", "==", taskId)));
   await Promise.all(notificationSnap.docs.map((row) => deleteDoc(row.ref).catch(() => undefined)));
 }

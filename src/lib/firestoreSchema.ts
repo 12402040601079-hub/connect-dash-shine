@@ -59,6 +59,13 @@ export type ProfileDoc = {
     ratingAvg: number;
     ratingCount: number;
   };
+  paymentDetails?: {
+    upiId?: string;
+    accountHolderName?: string;
+    accountNumber?: string;
+    ifscCode?: string;
+    bankName?: string;
+  };
   updatedAt?: Timestamp;
 };
 

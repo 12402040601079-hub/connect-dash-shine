@@ -10,6 +10,7 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  updateDoc,
   where,
   orderBy,
 } from "firebase/firestore";
@@ -24,7 +25,7 @@ import {
   watchMyPostedTasks,
 } from "@/services/tasks";
 import { counterBid, helperAcceptCounter, placeBid as placeTaskBid, updateBidStatus, watchHelperBids } from "@/services/bids";
-import { getMyNotifications, markNotificationRead, notify } from "@/services/notifications";
+import { getMyNotifications, markNotificationRead, markAllNotificationsRead, notify } from "@/services/notifications";
 import { submitRating } from "@/services/ratings";
 import { rankHelpersForTask, distanceKm } from "@/lib/matching";
 import { getHelperProfiles } from "@/services/helpers";
@@ -689,7 +690,10 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
             style={{marginTop:24,width:"100%",padding:"14px 0",borderRadius:14,background:`linear-gradient(135deg,${t.primary},${t.accent})`,color:"#fff",border:"none",cursor:"pointer",fontFamily:"Poppins",fontWeight:800,fontSize:15,display:"flex",alignItems:"center",justifyContent:"center",gap:10,boxShadow:`0 8px 28px ${t.primary}50`,letterSpacing:"0.3px",opacity:authLoading?.6:1}}>
             {authLoading?"Creating account…":<>Create My Account <I n="arR" s={17} c="#fff" sw={2.5}/></>}
           </button>
-          <p style={{fontSize:11,color:t.muted,textAlign:"center",marginTop:12}}>By registering you agree to our Terms & Privacy Policy</p>
+          <p style={{fontSize:11,color:t.muted,textAlign:"center",marginTop:12,lineHeight:1.6}}>
+            By registering you agree to our Terms &amp; Privacy Policy.
+            {role==="helper" && <> As a Helper, a <strong style={{color:t.text}}>15% monthly platform commission</strong> is deducted from your total earnings as a platform fee charged by MicroLink.</>}
+          </p>
         </GCard>
       </div>
     </div>
@@ -834,6 +838,8 @@ const NAV=[
   {id:"chat",label:"Chat",ic:"msg"},
   {id:"notifications",label:"Alerts",ic:"bell"},
   {id:"profile",label:"Profile",ic:"user"},
+  {id:"subscription",label:"Pro",ic:"award"},
+  {id:"contact",label:"Contact",ic:"phone"},
 ];
 
 const navItemsForRole = (role:string) => {
@@ -1006,12 +1012,20 @@ function Dashboard({t,user,setPage,postedTasks,currentUid,focusTab,onFocusTabHan
   const [taskToDelete,setTaskToDelete]=useState<any>(null);
   const [deleteBusy,setDeleteBusy]=useState(false);
   const [paymentTask,setPaymentTask]=useState<any>(null);
+  const [helperPaymentInfo,setHelperPaymentInfo]=useState<any>(null);
   const [paymentMethod,setPaymentMethod]=useState<"upi_qr"|"card"|"netbanking">("upi_qr");
   const [paymentBusy,setPaymentBusy]=useState(false);
   const [paymentFields,setPaymentFields]=useState<any>({upi:"",cardNumber:"",nameOnCard:"",expiry:"",cvv:"",bank:""});
   const [ratingTarget,setRatingTarget]=useState<any>(null);
   const [ratingSubmitting,setRatingSubmitting]=useState(false);
   const greeting=()=>{const h=new Date().getHours();return h<12?"Good morning":h<17?"Good afternoon":"Good evening";};
+
+  useEffect(()=>{
+    if(!paymentTask?.acceptedBy||!firestore){setHelperPaymentInfo(null);return;}
+    getDoc(doc(firestore,"profiles",paymentTask.acceptedBy))
+      .then(snap=>setHelperPaymentInfo(snap.exists()?snap.data():null))
+      .catch(()=>setHelperPaymentInfo(null));
+  },[paymentTask?.acceptedBy]);
 
   useEffect(()=>{
     if(!focusTab) return;
@@ -1241,6 +1255,16 @@ function Dashboard({t,user,setPage,postedTasks,currentUid,focusTab,onFocusTabHan
   const userOrders = visiblePostedTasks.filter((task:any)=>task?.acceptedBy && !["cancelled"].includes(task?.status));
   const helperOrders = assignedTasks.filter((task:any)=>!["cancelled"].includes(task?.status));
 
+  const helperMonthlyEarned = (() => {
+    if(user?.role!=="helper") return 0;
+    const mo=new Date().getMonth(), yr=new Date().getFullYear();
+    return helperOrders.filter((task:any)=>{
+      if(task.paymentStatus!=="paid") return false;
+      const d=task.paymentCompletedAt?.toDate?.();
+      return d && d.getMonth()===mo && d.getFullYear()===yr;
+    }).reduce((sum:number,task:any)=>sum+Number(task.paymentOptional||0),0);
+  })();
+
   const stats=[
     {label:user?.role==="helper"?"Assigned Orders":"Tasks Posted",val:user?.role==="helper"?helperOrders.length:activeTaskCount,ic:"checkC",badge:"Updated",col:t.accent},
     {label:"Completed",val:user?.role==="helper"?helperOrders.filter((task:any)=>task.status==="completed").length:completedCount,ic:"clock",badge:"Progress",col:t.warn},
@@ -1274,6 +1298,26 @@ function Dashboard({t,user,setPage,postedTasks,currentUid,focusTab,onFocusTabHan
           </GCard>
         ))}
       </div>
+
+      {user?.role==="helper" && (
+        <GCard t={t} style={{padding:"14px 18px",marginBottom:14,display:"flex",gap:14,flexWrap:"wrap",alignItems:"center"}}>
+          <div style={{flex:1,minWidth:180}}>
+            <div style={{fontSize:11,color:t.muted,fontWeight:700,textTransform:"uppercase",letterSpacing:"1px",marginBottom:4}}>This Month's Earnings</div>
+            <div style={{fontFamily:"Poppins",fontSize:28,fontWeight:800,color:t.text}}>₹{helperMonthlyEarned}</div>
+            <div style={{fontSize:11,color:t.muted,marginTop:2}}>Gross · {new Date().toLocaleString("en-IN",{month:"long",year:"numeric"})}</div>
+          </div>
+          <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+            <div style={{textAlign:"center",padding:"10px 18px",borderRadius:12,background:`${t.accent}12`,border:`1px solid ${t.accent}22`}}>
+              <div style={{fontFamily:"Poppins",fontSize:18,fontWeight:800,color:t.accent}}>₹{Math.round(helperMonthlyEarned*0.85)}</div>
+              <div style={{fontSize:10,color:t.muted,marginTop:2}}>Your Payout (85%)</div>
+            </div>
+            <div style={{textAlign:"center",padding:"10px 18px",borderRadius:12,background:`${t.primary}12`,border:`1px solid ${t.primary}22`}}>
+              <div style={{fontFamily:"Poppins",fontSize:18,fontWeight:800,color:t.primary}}>₹{Math.round(helperMonthlyEarned*0.15)}</div>
+              <div style={{fontSize:10,color:t.muted,marginTop:2}}>Platform Fee (15%)</div>
+            </div>
+          </div>
+        </GCard>
+      )}
 
       <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
         {tabs.map((tab:any)=>(
@@ -1469,14 +1513,64 @@ function Dashboard({t,user,setPage,postedTasks,currentUid,focusTab,onFocusTabHan
       {paymentTask && (
         <div style={{position:"fixed",inset:0,display:"flex",alignItems:"center",justifyContent:"center",zIndex:120,padding:16,background:t.mode==="dark"?"rgba(6,6,16,0.62)":"rgba(16,20,32,0.34)",backdropFilter:"blur(8px) saturate(120%)",WebkitBackdropFilter:"blur(8px) saturate(120%)",isolation:"isolate"}}>
           <GCard t={t} style={{width:"min(94vw,520px)",padding:"18px 18px",background:t.mode==="dark"?"rgba(13,10,31,0.96)":"rgba(255,255,255,0.97)",border:`1px solid ${t.borderStrong || t.border}`,boxShadow:"0 24px 60px rgba(0,0,0,0.34)",backdropFilter:"none",WebkitBackdropFilter:"none"}}>
-            <h4 style={{fontSize:18,fontWeight:800,color:t.text,marginBottom:8}}>Dummy Payment Module</h4>
-            <p style={{fontSize:12,color:t.muted,marginBottom:12}}>Task: {paymentTask.title}</p>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+              <div style={{width:38,height:38,borderRadius:11,background:`${t.accent}18`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <I n="zap" s={18} c={t.accent}/>
+              </div>
+              <div>
+                <h4 style={{fontSize:16,fontWeight:800,color:t.text,margin:0}}>Pay Helper</h4>
+                <p style={{fontSize:11,color:t.muted,margin:0}}>{paymentTask.title}</p>
+              </div>
+              <div style={{marginLeft:"auto",textAlign:"right"}}>
+                <div style={{fontFamily:"Poppins",fontSize:22,fontWeight:800,color:t.accent,lineHeight:1}}>₹{Number(paymentTask.paymentOptional||0).toFixed(0)}</div>
+                <div style={{fontSize:10,color:t.muted}}>agreed amount</div>
+              </div>
+            </div>
+
+            {helperPaymentInfo?.paymentDetails?.upiId || helperPaymentInfo?.paymentDetails?.accountNumber ? (
+              <div style={{background:`${t.accent}0e`,border:`1px solid ${t.accent}25`,borderRadius:12,padding:"12px 14px",marginBottom:14}}>
+                <div style={{fontSize:11,fontWeight:700,color:t.accent,textTransform:"uppercase",letterSpacing:"1px",marginBottom:8}}>Helper's Payment Details</div>
+                {helperPaymentInfo.paymentDetails.upiId && (
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                    <span style={{fontSize:11,color:t.muted,width:110}}>UPI ID</span>
+                    <span style={{fontSize:13,fontWeight:700,color:t.text,fontFamily:"monospace",background:t.secondary,padding:"3px 10px",borderRadius:7,userSelect:"all"}}>{helperPaymentInfo.paymentDetails.upiId}</span>
+                  </div>
+                )}
+                {helperPaymentInfo.paymentDetails.accountHolderName && (
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                    <span style={{fontSize:11,color:t.muted,width:110}}>Account Name</span>
+                    <span style={{fontSize:13,fontWeight:700,color:t.text}}>{helperPaymentInfo.paymentDetails.accountHolderName}</span>
+                  </div>
+                )}
+                {helperPaymentInfo.paymentDetails.bankName && (
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                    <span style={{fontSize:11,color:t.muted,width:110}}>Bank</span>
+                    <span style={{fontSize:13,fontWeight:600,color:t.text}}>{helperPaymentInfo.paymentDetails.bankName}</span>
+                  </div>
+                )}
+                {helperPaymentInfo.paymentDetails.accountNumber && (
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                    <span style={{fontSize:11,color:t.muted,width:110}}>Account No.</span>
+                    <span style={{fontSize:13,fontWeight:700,color:t.text,fontFamily:"monospace",background:t.secondary,padding:"3px 10px",borderRadius:7,userSelect:"all"}}>{helperPaymentInfo.paymentDetails.accountNumber}</span>
+                  </div>
+                )}
+                {helperPaymentInfo.paymentDetails.ifscCode && (
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:11,color:t.muted,width:110}}>IFSC</span>
+                    <span style={{fontSize:13,fontWeight:700,color:t.text,fontFamily:"monospace",background:t.secondary,padding:"3px 10px",borderRadius:7,userSelect:"all"}}>{helperPaymentInfo.paymentDetails.ifscCode}</span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{display:"flex",alignItems:"center",gap:10,background:`${t.warn}12`,border:`1px solid ${t.warn}30`,borderRadius:12,padding:"10px 14px",marginBottom:14}}>
+                <I n="info" s={16} c={t.warn}/>
+                <span style={{fontSize:12,color:t.warn,fontWeight:600}}>Helper hasn't saved payment details yet. Use the method below to pay.</span>
+              </div>
+            )}
+
+            <div style={{fontSize:11,color:t.muted,fontWeight:700,marginBottom:8}}>Payment method you used</div>
             <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
-              {[
-                {id:"upi_qr",label:"QR / UPI"},
-                {id:"card",label:"Credit / Debit"},
-                {id:"netbanking",label:"Net Banking"},
-              ].map((m:any)=>(
+              {([{id:"upi_qr",label:"QR / UPI"},{id:"card",label:"Credit / Debit"},{id:"netbanking",label:"Net Banking"}] as const).map((m)=>(
                 <button key={m.id} className="press" onClick={()=>setPaymentMethod(m.id)}
                   style={{padding:"6px 10px",borderRadius:99,border:`1px solid ${paymentMethod===m.id?t.primary+"66":t.border}`,background:paymentMethod===m.id?`${t.primary}18`:t.secondary,color:paymentMethod===m.id?t.primary:t.muted,fontSize:12,fontWeight:700,cursor:"pointer"}}>
                   {m.label}
@@ -1484,7 +1578,7 @@ function Dashboard({t,user,setPage,postedTasks,currentUid,focusTab,onFocusTabHan
               ))}
             </div>
             {paymentMethod==="upi_qr" && (
-              <GlassInp t={t} label="UPI Id" value={paymentFields.upi} onChange={(e:any)=>setPaymentFields((p:any)=>({...p,upi:e.target.value}))} placeholder="name@upi"/>
+              <GlassInp t={t} label="Transaction / UTR ID (optional)" value={paymentFields.upi} onChange={(e:any)=>setPaymentFields((p:any)=>({...p,upi:e.target.value}))} placeholder="12-digit UTR or UPI ref"/>
             )}
             {paymentMethod==="card" && (
               <div style={{display:"grid",gap:8}}>
@@ -1506,7 +1600,7 @@ function Dashboard({t,user,setPage,postedTasks,currentUid,focusTab,onFocusTabHan
               </button>
               <button className="press" onClick={handlePayment} disabled={paymentBusy}
                 style={{padding:"8px 12px",borderRadius:10,background:`linear-gradient(135deg,${t.primary},${t.accent})`,border:"none",color:"#fff",cursor:"pointer",fontSize:12,fontWeight:700}}>
-                {paymentBusy ? "Processing..." : "Pay Successfully"}
+                {paymentBusy ? "Processing..." : "Confirm Payment"}
               </button>
             </div>
           </GCard>
@@ -2475,6 +2569,7 @@ function Chat({t,currentUser}:any){
 
   const send=async()=>{
     if(!inp.trim() || !firestore || !activeConvo?.id || !myId) return;
+    if(activeConvo?.sessionStatus === "closed") return;
     const text = inp.trim();
     await addDoc(collection(firestore, "conversations", activeConvo.id, "messages"), {
       senderId: myId,
@@ -2519,8 +2614,8 @@ function Chat({t,currentUser}:any){
                   <span style={{fontSize:10,color:t.muted}}>{fmtRelative(c.lastMessageAt)}</span>
                 </div>
                 <p style={{fontSize:11,color:t.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginTop:2}}>{c.lastMessage || "Start chatting..."}</p>
-                {c.sessionStatus === "closing" && (
-                  <p style={{fontSize:10,color:t.warn,fontWeight:700,marginTop:4}}>Session closed after mutual ratings</p>
+                {c.sessionStatus === "closed" && (
+                  <p style={{fontSize:10,color:t.muted,fontWeight:600,marginTop:4}}>🔒 Session closed · ratings complete</p>
                 )}
               </div>
             </button>
@@ -2570,6 +2665,12 @@ function Chat({t,currentUser}:any){
             <div ref={endRef}/>
           </div>
           {/* Input */}
+          {activeConvo?.sessionStatus === "closed" ? (
+            <div style={{padding:"14px 20px",borderTop:`1px solid ${t.border}`,display:"flex",alignItems:"center",justifyContent:"center",gap:10,background:t.secondary}}>
+              <I n="shield" s={15} c={t.muted}/>
+              <span style={{fontSize:12,fontWeight:600,color:t.muted,fontFamily:"Poppins"}}>Chat disabled — both parties have rated this session</span>
+            </div>
+          ) : (
           <div style={{padding:"12px 16px",borderTop:`1px solid ${t.border}`,display:"flex",gap:9,alignItems:"center"}}>
             <button style={{width:36,height:36,borderRadius:10,background:t.secondary,border:`1px solid ${t.border}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:t.muted,flexShrink:0}}>
               <I n="clip" s={14}/>
@@ -2582,6 +2683,7 @@ function Chat({t,currentUser}:any){
               <I n="send" s={14} c="#fff"/>
             </button>
           </div>
+          )}
           </>
           )}
         </GCard>
@@ -2591,9 +2693,201 @@ function Chat({t,currentUser}:any){
 }
 
 /* ═══════════════════════════════════════════════════════
+   SUBSCRIPTION PAGE
+═══════════════════════════════════════════════════════ */
+function SubscriptionPage({t}:any){
+  const plans=[
+    {
+      id:"free",name:"Free",badge:null,price:"₹0",period:"/month",
+      tagline:"Great for getting started",current:true,color:t.muted,
+      btnColor:"",
+      features:[
+        "View tasks within 5 km",
+        "5 bids per day",
+        "Basic profile & ratings",
+        "Standard search visibility",
+        "Radius notifications",
+      ],cta:null,
+    },
+    {
+      id:"pro",name:"MicroLink Pro",badge:"Most Popular",price:"₹199",period:"/month",
+      tagline:"For serious helpers",current:false,color:t.primary,
+      btnColor:`linear-gradient(135deg,${t.primary},${t.accent})`,
+      features:[
+        "Unlimited bids daily",
+        "Priority matching boost",
+        "2-min early task access",
+        "Advanced analytics dashboard",
+        "\"Top Helper\" badge on profile",
+        "Smart AI task alerts",
+        "Tasks within 10 km radius",
+      ],cta:"Upgrade to Pro",
+    },
+    {
+      id:"elite",name:"MicroLink Elite",badge:"Premium",price:"₹399",period:"/month",
+      tagline:"For top earners",current:false,color:"#f59e0b",
+      btnColor:"linear-gradient(135deg,#f59e0b,#ef4444)",
+      features:[
+        "Everything in Pro",
+        "Zero platform commission",
+        "Verified Helper badge",
+        "High-value tasks (₹500+)",
+        "Tasks within 20 km radius",
+        "Guaranteed priority listing",
+        "Dedicated support line",
+      ],cta:"Upgrade to Elite",
+    },
+  ];
+
+  return(
+    <div className="su" style={{padding:"20px 0",maxWidth:960}}>
+      {/* Header */}
+      <div style={{marginBottom:32,textAlign:"center"}}>
+        <div style={{display:"inline-flex",alignItems:"center",gap:8,padding:"6px 18px",borderRadius:99,background:`${t.primary}15`,border:`1px solid ${t.primary}30`,color:t.primary,fontSize:13,fontWeight:700,marginBottom:14}}>
+          <I n="award" s={13} c={t.primary}/>Upgrade Your MicroLink Experience
+        </div>
+        <h2 style={{fontFamily:"Poppins",fontSize:28,fontWeight:800,color:t.text,letterSpacing:"-0.5px",marginBottom:8}}>Grow Your Earning Potential</h2>
+        <p style={{color:t.sub,fontSize:14,maxWidth:500,margin:"0 auto"}}>Choose the plan that fits how seriously you want to earn. Free helpers stay free forever.</p>
+      </div>
+
+      {/* Plan cards */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(265px,1fr))",gap:16,marginBottom:22}}>
+        {plans.map(plan=>(
+          <GCard key={plan.id} t={t} style={{
+            padding:"24px 22px",
+            position:"relative",
+            border:`1.5px solid ${plan.id==="pro"?t.primary+"55":plan.id==="elite"?"#f59e0b55":t.border}`,
+            boxShadow:plan.id==="pro"?`0 8px 40px ${t.primary}25`:plan.id==="elite"?"0 8px 40px #f59e0b22":undefined,
+            background:plan.id==="pro"?`linear-gradient(160deg,${t.card},${t.primary}08)`:plan.id==="elite"?`linear-gradient(160deg,${t.card},#f59e0b08)`:undefined,
+          }}>
+            {plan.badge&&(
+              <div style={{position:"absolute",top:-13,left:"50%",transform:"translateX(-50%)",padding:"4px 18px",borderRadius:99,fontSize:11,fontWeight:800,background:plan.btnColor,color:"#fff",boxShadow:`0 4px 12px ${plan.color}50`,whiteSpace:"nowrap"}}>
+                {plan.badge}
+              </div>
+            )}
+
+            <div style={{marginBottom:16,marginTop:plan.badge?8:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+                <div style={{width:38,height:38,borderRadius:12,background:`${plan.color}18`,display:"flex",alignItems:"center",justifyContent:"center",border:`1px solid ${plan.color}30`}}>
+                  <I n={plan.id==="free"?"shield":plan.id==="pro"?"zap":"award"} s={18} c={plan.color}/>
+                </div>
+                <div>
+                  <div style={{fontSize:15,fontWeight:800,color:t.text,fontFamily:"Poppins"}}>{plan.name}</div>
+                  <div style={{fontSize:11,color:t.muted}}>{plan.tagline}</div>
+                </div>
+              </div>
+              <div style={{display:"flex",alignItems:"baseline",gap:4}}>
+                <span style={{fontFamily:"Poppins",fontSize:34,fontWeight:800,color:plan.id==="free"?t.muted:plan.color}}>{plan.price}</span>
+                <span style={{fontSize:12,color:t.muted}}>{plan.period}</span>
+              </div>
+            </div>
+
+            <div style={{borderTop:`1px solid ${t.border}`,paddingTop:14,marginBottom:16,display:"flex",flexDirection:"column",gap:8}}>
+              {plan.features.map((f,i)=>(
+                <div key={i} style={{display:"flex",alignItems:"center",gap:9}}>
+                  <div style={{width:20,height:20,borderRadius:"50%",background:`${plan.color}15`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:`1px solid ${plan.color}25`}}>
+                    <I n="check" s={10} c={plan.color} sw={2.5}/>
+                  </div>
+                  <span style={{fontSize:12,color:t.text,fontWeight:500}}>{f}</span>
+                </div>
+              ))}
+            </div>
+
+            {plan.current ? (
+              <div style={{padding:"11px",borderRadius:11,background:t.secondary,border:`1px solid ${t.border}`,textAlign:"center",fontSize:12,fontWeight:700,color:t.muted}}>
+                ✓ Your Current Plan
+              </div>
+            ) : (
+              <button className="press" style={{width:"100%",padding:"12px",borderRadius:11,background:plan.btnColor,border:"none",color:"#fff",fontWeight:800,fontSize:13,cursor:"pointer",boxShadow:`0 4px 18px ${plan.color}40`,fontFamily:"Poppins",letterSpacing:"0.2px"}}>
+                {plan.cta}
+              </button>
+            )}
+          </GCard>
+        ))}
+      </div>
+
+      {/* Radius table */}
+      <GCard t={t} style={{padding:"18px 22px",marginBottom:16}}>
+        <div style={{fontSize:13,fontWeight:800,color:t.text,fontFamily:"Poppins",marginBottom:14,display:"flex",alignItems:"center",gap:8}}>
+          <I n="pin" s={14} c={t.primary}/>Task Discovery Radius
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}}>
+          {[{plan:"Free",radius:"5 km",col:t.muted},{plan:"Pro",radius:"10 km",col:t.primary},{plan:"Elite",radius:"20 km",col:"#f59e0b"}].map(r=>(
+            <div key={r.plan} style={{textAlign:"center",padding:"14px 10px",borderRadius:12,background:`${r.col}10`,border:`1px solid ${r.col}25`}}>
+              <div style={{fontFamily:"Poppins",fontSize:22,fontWeight:800,color:r.col}}>{r.radius}</div>
+              <div style={{fontSize:11,color:t.muted,marginTop:4}}>{r.plan}</div>
+            </div>
+          ))}
+        </div>
+      </GCard>
+
+      {/* Commission info */}
+      <div style={{padding:"16px 22px",borderRadius:14,background:`${t.primary}0d`,border:`1px solid ${t.primary}22`,display:"flex",gap:12,alignItems:"flex-start"}}>
+        <I n="info" s={16} c={t.primary}/>
+        <div>
+          <p style={{fontSize:13,color:t.sub,marginBottom:4,lineHeight:1.6}}>
+            <strong style={{color:t.text}}>Platform commission:</strong> Free and Pro helpers contribute a <strong style={{color:t.text}}>15% monthly commission</strong> on total earnings as a platform fee. Elite helpers enjoy <strong style={{color:"#f59e0b"}}>zero commission</strong>.
+          </p>
+          <p style={{fontSize:12,color:t.muted}}>Billing is monthly. Cancel anytime. Subscriptions power the matching engine, smart alerts, and infrastructure.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   CONTACT US
+═══════════════════════════════════════════════════════ */
+function ContactUs({t}:any){
+  return(
+    <div className="su" style={{padding:"20px 0",maxWidth:560}}>
+      <div style={{marginBottom:28}}>
+        <h2 style={{fontFamily:"Poppins",fontSize:28,fontWeight:800,color:t.text,letterSpacing:"-0.5px"}}>Contact Us</h2>
+        <p style={{color:t.sub,marginTop:6,fontSize:14}}>Have a question or issue? Reach out to the MicroLink team directly.</p>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
+        {/* Email */}
+        <GCard t={t} style={{display:"flex",alignItems:"center",gap:18,padding:"22px 24px"}}>
+          <div style={{width:50,height:50,borderRadius:14,background:`linear-gradient(135deg,${t.primary}28,${t.accent}18)`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:`0 4px 14px ${t.primary}25`}}>
+            <I n="mail" s={22} c={t.primary}/>
+          </div>
+          <div style={{flex:1}}>
+            <div style={{fontSize:10,fontWeight:800,color:t.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:5}}>Email</div>
+            <a href="mailto:jainishshah1111@gmail.com"
+              style={{fontSize:15,fontWeight:700,color:t.primary,textDecoration:"none",fontFamily:"Poppins",wordBreak:"break-all"}}>
+              jainishshah1111@gmail.com
+            </a>
+          </div>
+        </GCard>
+        {/* Phone */}
+        <GCard t={t} style={{display:"flex",alignItems:"center",gap:18,padding:"22px 24px"}}>
+          <div style={{width:50,height:50,borderRadius:14,background:`linear-gradient(135deg,${t.accent}28,${t.primary}18)`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:`0 4px 14px ${t.accent}25`}}>
+            <I n="phone" s={22} c={t.accent}/>
+          </div>
+          <div style={{flex:1}}>
+            <div style={{fontSize:10,fontWeight:800,color:t.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:5}}>Phone / WhatsApp</div>
+            <a href="tel:+919408362739"
+              style={{fontSize:15,fontWeight:700,color:t.accent,textDecoration:"none",fontFamily:"Poppins"}}>
+              +91 94083 62739
+            </a>
+          </div>
+        </GCard>
+        {/* Note */}
+        <div style={{padding:"16px 20px",borderRadius:14,background:`${t.primary}0e`,border:`1px solid ${t.primary}22`,display:"flex",gap:12,alignItems:"flex-start"}}>
+          <I n="info" s={16} c={t.primary}/>
+          <p style={{fontSize:13,color:t.sub,lineHeight:1.65,margin:0}}>
+            Support is available <strong style={{color:t.text}}>Monday – Saturday, 9 AM – 7 PM IST</strong>. Drop an email anytime and we'll get back within 24 hours.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
    PROFILE — REAL USER DATA ONLY
 ═══════════════════════════════════════════════════════ */
-function Profile({t,user,online,setOnline}:any){
+function Profile({t,user,currentUid,online,setOnline,setPage}:any){
   if(!user)return null;
   const [editing,setEditing]=useState(false);
   const [profileMsg,setProfileMsg]=useState("");
@@ -2604,6 +2898,16 @@ function Profile({t,user,online,setOnline}:any){
     idFile:null,
     idFileName:"",
   });
+
+  const [payDetails,setPayDetails]=useState<any>({
+    upiId: user?.paymentDetails?.upiId || "",
+    accountHolderName: user?.paymentDetails?.accountHolderName || "",
+    accountNumber: user?.paymentDetails?.accountNumber || "",
+    ifscCode: user?.paymentDetails?.ifscCode || "",
+    bankName: user?.paymentDetails?.bankName || "",
+  });
+  const [payDetailsBusy,setPayDetailsBusy]=useState(false);
+  const [payDetailsMsg,setPayDetailsMsg]=useState("");
 
   useEffect(()=>{
     setLocalProfile((p:any)=>({
@@ -2621,6 +2925,28 @@ function Profile({t,user,online,setOnline}:any){
     setEditing(false);
     setProfileMsg("Profile fields updated locally. Firestore update is disabled for now.");
     setTimeout(()=>setProfileMsg(""), 2200);
+  };
+
+  const savePaymentDetails = async () => {
+    if(!currentUid || !firestore){setPayDetailsMsg("Not logged in");return;}
+    setPayDetailsBusy(true);
+    try{
+      await updateDoc(doc(firestore,"profiles",currentUid),{
+        paymentDetails:{
+          upiId:payDetails.upiId.trim(),
+          accountHolderName:payDetails.accountHolderName.trim(),
+          accountNumber:payDetails.accountNumber.trim(),
+          ifscCode:payDetails.ifscCode.trim().toUpperCase(),
+          bankName:payDetails.bankName.trim(),
+        },
+        updatedAt:serverTimestamp(),
+      });
+      setPayDetailsMsg("Payment details saved ✓");
+    }catch(e:any){
+      setPayDetailsMsg("Error: "+(e.message||"unknown"));
+    }
+    setPayDetailsBusy(false);
+    setTimeout(()=>setPayDetailsMsg(""),3000);
   };
 
   return(
@@ -2755,6 +3081,36 @@ function Profile({t,user,online,setOnline}:any){
       </GCard>
 
       {/* Skills / Interests — real from form */}
+      {/* Payment Details — helpers only */}
+      {user.role==="helper" && (
+        <GCard t={t} style={{overflow:"hidden",marginBottom:14}}>
+          <div style={{padding:"14px 22px",borderBottom:`1px solid ${t.border}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <I n="shield" s={14} c={t.accent}/>
+              <span style={{fontSize:13,fontWeight:800,color:t.text,fontFamily:"Poppins"}}>Payment Details</span>
+            </div>
+            <span style={{fontSize:11,color:t.muted}}>Shown to users when they pay you</span>
+          </div>
+          <div style={{padding:"18px 22px",display:"grid",gap:12}}>
+            <GlassInp t={t} label="UPI ID" ic="phone" value={payDetails.upiId} onChange={(e:any)=>setPayDetails((p:any)=>({...p,upiId:e.target.value}))} placeholder="yourname@upi"/>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              <GlassInp t={t} label="Account Holder Name" value={payDetails.accountHolderName} onChange={(e:any)=>setPayDetails((p:any)=>({...p,accountHolderName:e.target.value}))} placeholder="Full name"/>
+              <GlassInp t={t} label="Bank Name" value={payDetails.bankName} onChange={(e:any)=>setPayDetails((p:any)=>({...p,bankName:e.target.value}))} placeholder="e.g. SBI"/>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              <GlassInp t={t} label="Account Number" value={payDetails.accountNumber} onChange={(e:any)=>setPayDetails((p:any)=>({...p,accountNumber:e.target.value}))} placeholder="0000000000"/>
+              <GlassInp t={t} label="IFSC Code" value={payDetails.ifscCode} onChange={(e:any)=>setPayDetails((p:any)=>({...p,ifscCode:e.target.value}))} placeholder="SBIN0000001"/>
+            </div>
+            {payDetailsMsg && <p style={{fontSize:12,fontWeight:700,color:payDetailsMsg.startsWith("Error")?t.danger:t.accent}}>{payDetailsMsg}</p>}
+            <button className="press" onClick={savePaymentDetails} disabled={payDetailsBusy}
+              style={{padding:"11px",borderRadius:11,background:`linear-gradient(135deg,${t.accent},${t.primary})`,border:"none",color:"#fff",fontWeight:800,fontSize:13,cursor:"pointer",opacity:payDetailsBusy?.7:1}}>
+              {payDetailsBusy?"Saving...":"Save Payment Details"}
+            </button>
+          </div>
+        </GCard>
+      )}
+
+      {/* Skills / Interests — real from form */}
       {ints.length>0&&(
         <GCard t={t} style={{padding:"18px 22px",marginBottom:14}}>
           <div style={{fontSize:13,fontWeight:800,color:t.text,marginBottom:14,display:"flex",alignItems:"center",gap:8,fontFamily:"Poppins"}}>
@@ -2802,7 +3158,7 @@ function Profile({t,user,online,setOnline}:any){
   );
 }
 
-function NotificationsPage({t,currentUser,notifications,onMarkRead,setPage,setDashboardTab}:any){
+function NotificationsPage({t,currentUser,notifications,onMarkRead,onMarkAllRead,setPage,setDashboardTab}:any){
   const jumpFromNotification = (item:any) => {
     const type = item?.type;
     if (["bid_received", "bid_countered"].includes(type)) {
@@ -2816,11 +3172,22 @@ function NotificationsPage({t,currentUser,notifications,onMarkRead,setPage,setDa
     }
   };
 
+  const unread = (notifications||[]).filter((n:any)=>!n.read);
+
   return(
     <div className="su" style={{padding:"20px 0",maxWidth:860}}>
-      <div style={{marginBottom:18}}>
-        <h2 style={{fontFamily:"Poppins",fontSize:28,fontWeight:800,color:t.text,letterSpacing:"-0.5px"}}>Notifications</h2>
-        <p style={{color:t.sub,marginTop:5,fontSize:14}}>Latest workflow and moderation events for your account.</p>
+      <div style={{marginBottom:18,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+        <div>
+          <h2 style={{fontFamily:"Poppins",fontSize:28,fontWeight:800,color:t.text,letterSpacing:"-0.5px"}}>Notifications</h2>
+          <p style={{color:t.sub,marginTop:5,fontSize:14}}>Latest workflow and moderation events for your account.</p>
+        </div>
+        {unread.length>0 && (
+          <button className="press" onClick={onMarkAllRead}
+            style={{display:"flex",alignItems:"center",gap:7,padding:"9px 16px",borderRadius:11,background:`linear-gradient(135deg,${t.primary}22,${t.accent}12)`,border:`1px solid ${t.primary}44`,color:t.primary,cursor:"pointer",fontSize:12,fontWeight:700,flexShrink:0}}>
+            <I n="check" s={13} c={t.primary} sw={2.5}/>
+            Mark all read ({unread.length})
+          </button>
+        )}
       </div>
       <GCard t={t} style={{padding:"14px"}}>
         {(notifications || []).length===0 && <div style={{color:t.muted,fontSize:13}}>No notifications yet.</div>}
@@ -2934,6 +3301,7 @@ export default function App(){
     rating: 0,
     helperMeta: profile?.helperMeta,
     stats: profile?.stats,
+    paymentDetails: profile?.paymentDetails,
   } : null;
 
   const login=useCallback(()=>{
@@ -2953,6 +3321,12 @@ export default function App(){
 
   const markRead = async (notificationId:string) => {
     await markNotificationRead(notificationId);
+  };
+
+  const markAllRead = async () => {
+    const unread = notifications.filter((n:any)=>!n.read).map((n:any)=>n.id);
+    if(unread.length===0) return;
+    await markAllNotificationsRead(unread);
   };
 
   if(authLoading) return (
@@ -2989,8 +3363,10 @@ export default function App(){
           {page==="post-task"&&<PostTask t={t} setPage={setPage} currentUser={{uid: authUser?.uid, ...userForUI}}/>}
           {page==="requests"  &&<Bidding t={t} currentUser={{uid: authUser?.uid, ...userForUI}} setPage={setPage}/>}
           {page==="chat"     &&<Chat t={t} currentUser={{uid: authUser?.uid, ...userForUI}}/>}
-          {page==="notifications"&&<NotificationsPage t={t} currentUser={{uid: authUser?.uid, ...userForUI}} notifications={notifications} onMarkRead={markRead} setPage={setPage} setDashboardTab={setDashboardFocusTab}/>}
-          {page==="profile"  &&<Profile t={t} user={userForUI} online={online} setOnline={setOnline}/>}
+          {page==="notifications"&&<NotificationsPage t={t} currentUser={{uid: authUser?.uid, ...userForUI}} notifications={notifications} onMarkRead={markRead} onMarkAllRead={markAllRead} setPage={setPage} setDashboardTab={setDashboardFocusTab}/>}
+          {page==="profile"  &&<Profile t={t} user={userForUI} currentUid={authUser?.uid} online={online} setOnline={setOnline} setPage={setPage}/>}
+          {page==="subscription"&&<SubscriptionPage t={t} setPage={setPage}/>}
+          {page==="contact"  &&<ContactUs t={t}/>}
         </div>
       </main>
 

@@ -1,25 +1,48 @@
 import React from "react";
+import { AT } from "./adminTheme";
 
-export default function Header() {
+const PAGE_TITLES: Record<string, string> = {
+  dashboard: "Dashboard",
+  analytics: "Analytics & Insights",
+  users: "User Management",
+  jobs: "Job Posts",
+  reports: "Reports & Disputes",
+  moderation: "Unified Moderation",
+  "trust-safety": "Trust & Safety",
+  categories: "Categories",
+};
+
+export default function Header({ active, onSignOut }: { active?: string; onSignOut?: () => void }) {
+  const title = PAGE_TITLES[active ?? "dashboard"] ?? "Super Admin";
   return (
-    <header className="flex items-center justify-between px-6 py-4 border-b dark:border-gray-700 bg-white dark:bg-gray-800">
-      <div className="flex items-center space-x-4">
-        <button className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
-          <span className="sr-only">Toggle sidebar</span>
-          ☰
-        </button>
-        <h1 className="text-lg font-medium text-gray-900 dark:text-gray-100">Super Admin</h1>
-      </div>
-
-      <div className="flex items-center space-x-4">
-        <button className="px-3 py-2 bg-indigo-600 text-white rounded text-sm">Create Announcement</button>
-        <div className="flex items-center space-x-3">
-          <div className="text-right">
-            <div className="text-xs text-gray-500">Admin</div>
-            <div className="text-sm font-medium text-gray-900 dark:text-gray-100">super@microlink</div>
-          </div>
-          <div className="w-9 h-9 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center text-sm">SA</div>
+    <header style={{
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+      padding: "0 24px", height: 60, flexShrink: 0,
+      borderBottom: `1px solid ${AT.border}`,
+      background: "rgba(7,6,26,0.75)",
+      backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
+    }}>
+      <h1 style={{ fontSize: 16, fontWeight: 700, color: AT.text, margin: 0 }}>{title}</h1>
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <div style={{ textAlign: "right" }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: AT.text }}>super@microlink</div>
+          <div style={{ fontSize: 10, color: AT.muted }}>Administrator</div>
         </div>
+        <div style={{
+          width: 36, height: 36, borderRadius: "50%",
+          background: AT.primaryGrad,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 13, fontWeight: 800, color: "#fff",
+        }}>SA</div>
+        <button
+          onClick={onSignOut}
+          style={{
+            padding: "7px 14px", borderRadius: 8,
+            border: `1px solid ${AT.danger}40`,
+            background: `${AT.danger}12`,
+            color: AT.danger, fontSize: 12, fontWeight: 700, cursor: "pointer",
+          }}
+        >Sign Out</button>
       </div>
     </header>
   );
