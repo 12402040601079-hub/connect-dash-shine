@@ -1,11 +1,15 @@
 # 🚀 MicroLink | Enterprise Hyper-Local Micro-Gig Platform (Gujarat Edition)
 
+[![Primary Server URL](https://img.shields.io/badge/Primary_Server-connect--dash--shine.onrender.com-4F46E5?style=for-the-badge&logo=render)](https://connect-dash-shine.onrender.com/)
 ![MicroLink Banner](https://img.shields.io/badge/MicroLink-Gujarat_Micro--Gigs-6366F1?style=for-the-badge&logo=react)
 ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 ![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen?style=for-the-badge)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178C6?style=for-the-badge&logo=typescript)
 ![Vite](https://img.shields.io/badge/Vite-7.3+-646CFF?style=for-the-badge&logo=vite)
 ![Security Shield](https://img.shields.io/badge/Security-Aadhaar_e--KYC-059669?style=for-the-badge)
+
+🌐 **Primary Server URL**: [https://connect-dash-shine.onrender.com](https://connect-dash-shine.onrender.com/)  
+📦 **GitHub Repository**: [https://github.com/12402040601079-hub/connect-dash-shine.git](https://github.com/12402040601079-hub/connect-dash-shine.git)
 
 **MicroLink** is an enterprise-grade, high-traffic, hyper-local micro-gig marketplace designed specifically for **Gujarat & India**. Built on React 18, TypeScript, Vite, and Tailwind CSS, it offers physical presence verification, dynamic AI economics, multilingual vernacular support, real-time vehicle telemetry, and GST-compliant invoicing in a sleek, light-mode-default responsive application.
 
@@ -29,6 +33,14 @@
 
 ### 📄 4. Fintech & GST Tax Compliance
 - **🧾 GST Tax Invoice Generator**: Automatic calculation under SAC Code 9987 with 9% CGST + 9% SGST breakdown, platform fees, and 1-click printable PDF receipts.
+
+---
+
+## 🌐 Live Server & Deployment Architecture
+
+- **Primary Server**: [https://connect-dash-shine.onrender.com](https://connect-dash-shine.onrender.com/)
+- **Container Build**: Powered by Docker + Nginx (`Dockerfile` & `nginx.conf` included) for zero-downtime rolling updates.
+- **Cloud Fallbacks**: Pre-configured for Render, Vercel (`vercel.json`), Netlify (`netlify.toml`), and GitHub Actions (`.github/workflows/ci-cd.yml`).
 
 ---
 
@@ -115,23 +127,6 @@ VITE_MAPS_API_KEY="your-google-maps-key"
    npx tsc --noEmit
    npm run build
    ```
-
----
-
-## 🌐 Server Deployment Guides
-
-### Option 1: 1-Click Cloud Deployment (Vercel / Netlify)
-1. Push your repository to GitHub.
-2. Import the repo into Vercel or Netlify.
-3. Add the environment variables from `.env.example`.
-4. Deploy! The included [`vercel.json`](file:///c:/new%20noom/connect-dash-shine/vercel.json) or [`netlify.toml`](file:///c:/new%20noom/connect-dash-shine/netlify.toml) will automatically configure SPA client-side routing.
-
-### Option 2: Docker Container Deployment (AWS EC2 / DigitalOcean / VPS)
-```bash
-docker build -t microlink-app .
-docker run -d -p 80:80 --name microlink microlink-app
-```
-Uses the pre-tuned multi-stage [`Dockerfile`](file:///c:/new%20noom/connect-dash-shine/Dockerfile) with Nginx Gzip compression and static caching ([`nginx.conf`](file:///c:/new%20noom/connect-dash-shine/nginx.conf)).
 
 ---
 

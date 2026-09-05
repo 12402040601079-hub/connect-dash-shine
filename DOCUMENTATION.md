@@ -1,7 +1,10 @@
 # 📚 MicroLink Technical System Documentation
 
-## 1. Executive System Summary
+## 1. Executive System Summary & Production Endpoints
 MicroLink is a hyper-local micro-gig service platform engineered for high concurrency, low latency, and physical verification across India & Gujarat.
+
+- **Primary Production Server URL**: [https://connect-dash-shine.onrender.com](https://connect-dash-shine.onrender.com/)
+- **GitHub Repository**: [https://github.com/12402040601079-hub/connect-dash-shine.git](https://github.com/12402040601079-hub/connect-dash-shine.git)
 
 ---
 
@@ -27,6 +30,7 @@ graph TD
     end
 
     B -->|Production Shield| L[React ErrorBoundary]
+    B -->|Production Host| M[Render Server: connect-dash-shine.onrender.com]
 ```
 
 ---
