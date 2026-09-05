@@ -1,4 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+@import 'leaflet/dist/leaflet.css';
 
 @tailwind base;
 @tailwind components;
@@ -124,5 +125,139 @@
   }
   .gradient-btn:hover {
     filter: brightness(1.1);
+  }
+
+  /* Eye-Care Warm Sepia Mode (Night Shift / Blue-light filter) */
+  html.eye-care-mode {
+    filter: sepia(18%) saturate(90%) hue-rotate(-8deg) brightness(97%);
+  }
+
+  /* Radar pulse animation for Proximity Map (subtle) */
+  @keyframes radarPing {
+    0%, 100% {
+      transform: scale(0.95);
+      opacity: 0.6;
+    }
+    50% {
+      transform: scale(1.08);
+      opacity: 0.2;
+    }
+  }
+
+  .radar-ring {
+    animation: radarPing 4s ease-in-out infinite;
+  }
+
+  /* Smooth scrolling across all document contexts */
+  html, body, main {
+    scroll-behavior: smooth;
+  }
+
+  /* Page Smooth Sliding Animation (Clean & Fast) */
+  @keyframes pageSlideIn {
+    0% {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .page-slide-in {
+    animation: pageSlideIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  /* Soft Static Ambient Background Glows */
+  .floating-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    pointer-events: none;
+    opacity: 0.2;
+  }
+
+  .orb-1 {
+    width: 320px;
+    height: 320px;
+    background: radial-gradient(circle, #6366f1 0%, transparent 70%);
+    top: 10%;
+    right: 5%;
+  }
+
+  .orb-2 {
+    width: 280px;
+    height: 280px;
+    background: radial-gradient(circle, #10b981 0%, transparent 70%);
+    bottom: 15%;
+    left: 8%;
+  }
+
+  .orb-3 {
+    width: 220px;
+    height: 220px;
+    background: radial-gradient(circle, #06b6d4 0%, transparent 70%);
+    top: 45%;
+    left: 35%;
+  }
+
+  /* Sleek Modern Hover Lift */
+  .hover-bounce {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .hover-bounce:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px -6px rgba(79, 70, 229, 0.18);
+  }
+  .hover-bounce:active {
+    transform: scale(0.98);
+  }
+
+  /* Claymorphic Card */
+  .clay-card {
+    border-radius: 20px;
+    background: linear-gradient(145deg, #ffffff, #f8fafc);
+    box-shadow: 
+      6px 6px 16px rgba(166, 180, 200, 0.2),
+      -4px -4px 12px rgba(255, 255, 255, 0.9);
+    transition: all 0.2s ease;
+  }
+  .clay-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 
+      8px 8px 20px rgba(166, 180, 200, 0.28),
+      -6px -6px 14px rgba(255, 255, 255, 1);
+  }
+
+  .clay-badge {
+    border-radius: 99px;
+    background: linear-gradient(145deg, #6366f1, #4f46e5);
+    color: #ffffff;
+    box-shadow: 
+      2px 2px 6px rgba(79, 70, 229, 0.25),
+      -1px -1px 4px rgba(255, 255, 255, 0.4);
+  }
+
+  /* Neumorphic Inset */
+  .neumorphic-inset {
+    background: #f1f5f9;
+    box-shadow: 
+      inset 3px 3px 6px rgba(203, 213, 225, 0.5),
+      inset -3px -3px 6px rgba(255, 255, 255, 0.9);
+    border-radius: 14px;
+  }
+
+  /* Skeleton Screen Shimmer */
+  @keyframes skeletonWave {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  .skeleton-shimmer {
+    background: linear-gradient(90deg, rgba(226, 232, 240, 0.6) 25%, rgba(241, 245, 249, 0.9) 50%, rgba(226, 232, 240, 0.6) 75%);
+    background-size: 200% 100%;
+    animation: skeletonWave 1.8s ease-in-out infinite;
+    border-radius: 8px;
   }
 }

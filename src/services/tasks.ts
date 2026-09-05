@@ -17,6 +17,7 @@ import { canAccept, canConfirmCompletion, canRequestCompletion } from "@/lib/tas
 import type { TaskDoc, TaskStatus } from "@/lib/firestoreSchema";
 import { acceptBid as acceptBidDoc, rejectOtherBids } from "@/services/bids";
 import { notify } from "@/services/notifications";
+import { offlineService } from "@/services/offline";
 
 export type CreateTaskInput = {
   title: string;
@@ -91,13 +92,20 @@ export async function getOpenTasks(): Promise<TaskWithId[]> {
 
 export function watchMyPostedTasks(userId: string, onData: (rows: TaskWithId[]) => void): () => void {
   if (!firestore) {
-    onData([]);
+    const cached = offlineService.getCachedTasks() as any[];
+    onData(cached);
     return () => undefined;
   }
 
   const q = query(collection(firestore, "tasks"), where("posterId", "==", userId), orderBy("createdAt", "desc"));
   return onSnapshot(q, (snap) => {
-    onData(snap.docs.map((d) => ({ id: d.id, ...(d.data() as TaskDoc) })));
+    const rows = snap.docs.map((d) => ({ id: d.id, ...(d.data() as TaskDoc) }));
+    offlineService.cacheTasksLocally(rows);
+    onData(rows);
+  }, () => {
+    // Fallback to offline cached tasks if network is unavailable
+    const cached = offlineService.getCachedTasks() as any[];
+    onData(cached);
   });
 }
 
@@ -123,6 +131,13 @@ export async function acceptBid(args: {
 
   if (!canAccept(args.currentStatus)) {
     throw new Error("Task can only accept bids while open");
+  }
+
+  // Security Validation: Verify helper applied for this exact task ID
+  const bidRef = doc(firestore!, "bids", args.bidId);
+  const bidSnap = await getDoc(bidRef);
+  if (!bidSnap.exists() || bidSnap.data()?.taskId !== args.taskId || bidSnap.data()?.helperId !== args.helperId) {
+    throw new Error("Security Error: Requester can only accept helpers who have submitted a valid bid for this task!");
   }
 
   await updateDoc(doc(firestore!, "tasks", args.taskId), {

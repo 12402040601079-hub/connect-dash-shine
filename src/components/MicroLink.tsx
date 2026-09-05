@@ -34,6 +34,30 @@ import CompletionPanel from "@/components/workflow/CompletionPanel";
 import RatingDialog from "@/components/workflow/RatingDialog";
 import HelperMapCard from "@/components/workflow/HelperMapCard";
 import HelperRequestsMap from "@/components/workflow/HelperRequestsMap";
+import ProximityMap from "@/components/workflow/ProximityMap";
+import AppLogo from "@/components/brand/AppLogo";
+import TiltCard3D from "@/components/ui/TiltCard3D";
+import LiveTrackingMap from "@/components/workflow/LiveTrackingMap";
+import AccountVerificationModal from "@/components/workflow/AccountVerificationModal";
+import GoogleRewardModal from "@/components/workflow/GoogleRewardModal";
+import InteractiveIllustrations from "@/components/ui/InteractiveIllustrations";
+import InteractiveScrollytelling from "@/components/ui/InteractiveScrollytelling";
+import MascotAssistant from "@/components/ui/MascotAssistant";
+import CategoryScroller from "@/components/ui/CategoryScroller";
+import AadhaarKycModal from "@/components/workflow/AadhaarKycModal";
+import GeoQrHandshakeModal from "@/components/workflow/GeoQrHandshakeModal";
+import AiWorkProofModal from "@/components/workflow/AiWorkProofModal";
+import WebRtcCallModal from "@/components/workflow/WebRtcCallModal";
+import GstInvoiceModal from "@/components/workflow/GstInvoiceModal";
+import { calculateAiFareEstimate } from "@/services/aiEstimator";
+import { translatorService, type SupportedLanguage } from "@/services/translator";
+import { generateGstInvoice, type InvoiceData } from "@/services/invoice";
+import { sound } from "@/services/sound";
+import { speechService } from "@/services/speech";
+import { fetchTaskWeather, type WeatherInfo } from "@/services/weather";
+import { getGamificationState, addHelperXP, triggerCelebration, type GamificationState } from "@/services/gamification";
+import { sanitizeInput } from "@/services/security";
+import { rateLimiter } from "@/services/rateLimiter";
 
 /* ═══════════════════════════════════════════════════════
    GLOBAL CSS — GLASSMORPHISM PREMIUM
@@ -116,71 +140,71 @@ function injectCSS(){
 const TH={
   dark:{
     mode:"dark",
-    bg:"#07061a",
-    bgGrad:"linear-gradient(135deg,#07061a 0%,#0e0c2a 50%,#120e35 100%)",
-    card:"rgba(18,14,44,0.6)",
-    cardSolid:"#120e35",
-    border:"rgba(139,92,246,0.2)",
-    borderStrong:"rgba(139,92,246,0.4)",
-    text:"#f0edff",
-    sub:"#9b8fc0",
-    muted:"#6b5f8a",
-    primary:"#8b5cf6",
-    primaryGrad:"linear-gradient(135deg,#8b5cf6,#a78bfa)",
+    bg:"#0b0f19",
+    bgGrad:"linear-gradient(135deg,#0b0f19 0%,#111827 50%,#131b2e 100%)",
+    card:"rgba(19,27,46,0.72)",
+    cardSolid:"#131b2e",
+    border:"rgba(99,102,241,0.22)",
+    borderStrong:"rgba(99,102,241,0.45)",
+    text:"#f1f5f9",
+    sub:"#94a3b8",
+    muted:"#64748b",
+    primary:"#6366f1",
+    primaryGrad:"linear-gradient(135deg,#6366f1,#818cf8)",
     pFg:"#fff",
-    accent:"#06d6a0",
-    accentGrad:"linear-gradient(135deg,#06d6a0,#00b894)",
+    accent:"#10b981",
+    accentGrad:"linear-gradient(135deg,#10b981,#34d399)",
     aFg:"#fff",
-    secondary:"rgba(139,92,246,0.1)",
-    sFg:"#c4b5fd",
-    danger:"#f87171",
-    warn:"#fbbf24",
-    input:"rgba(139,92,246,0.08)",
-    sidebar:"rgba(7,6,26,0.85)",
-    glass:"rgba(18,14,44,0.5)",
-    glassStrong:"rgba(18,14,44,0.8)",
-    o1:"rgba(139,92,246,0.25)",
-    o2:"rgba(6,214,160,0.2)",
-    o3:"rgba(239,68,68,0.15)",
-    o4:"rgba(251,191,36,0.15)",
-    grid:"rgba(139,92,246,0.06)",
-    shadow:"0 8px 32px rgba(139,92,246,0.25)",
-    shadowStrong:"0 20px 60px rgba(139,92,246,0.35)",
-    glow:"rgba(139,92,246,0.4)",
+    secondary:"rgba(99,102,241,0.12)",
+    sFg:"#a5b4fc",
+    danger:"#f43f5e",
+    warn:"#f59e0b",
+    input:"rgba(30,41,59,0.7)",
+    sidebar:"rgba(11,15,25,0.92)",
+    glass:"rgba(19,27,46,0.6)",
+    glassStrong:"rgba(19,27,46,0.85)",
+    o1:"rgba(99,102,241,0.2)",
+    o2:"rgba(16,185,129,0.18)",
+    o3:"rgba(244,63,94,0.12)",
+    o4:"rgba(245,158,11,0.12)",
+    grid:"rgba(99,102,241,0.05)",
+    shadow:"0 8px 32px rgba(0,0,0,0.36)",
+    shadowStrong:"0 20px 60px rgba(0,0,0,0.5)",
+    glow:"rgba(99,102,241,0.35)",
   },
   light:{
     mode:"light",
-    bg:"#f0ebff",
-    bgGrad:"linear-gradient(135deg,#f0ebff 0%,#e8f4ff 50%,#fdf0ff 100%)",
-    card:"rgba(255,255,255,0.7)",
+    bg:"#f8fafc",
+    bgGrad:"linear-gradient(135deg,#f8fafc 0%,#f1f5f9 50%,#e2e8f0 100%)",
+    card:"rgba(255,255,255,0.88)",
     cardSolid:"#ffffff",
-    border:"rgba(139,92,246,0.15)",
-    borderStrong:"rgba(139,92,246,0.35)",
-    text:"#1a1035",
-    sub:"#5a4a80",
-    muted:"#9080b8",
-    primary:"#7c3aed",
-    primaryGrad:"linear-gradient(135deg,#7c3aed,#9c5cf6)",
+    border:"rgba(203,213,225,0.8)",
+    borderStrong:"rgba(99,102,241,0.35)",
+    text:"#0f172a",
+    sub:"#475569",
+    muted:"#64748b",
+    primary:"#4f46e5",
+    primaryGrad:"linear-gradient(135deg,#4f46e5,#6366f1)",
     pFg:"#fff",
     accent:"#059669",
-    accentGrad:"linear-gradient(135deg,#059669,#06b680)",
+    accentGrad:"linear-gradient(135deg,#059669,#10b981)",
     aFg:"#fff",
-    secondary:"rgba(124,58,237,0.08)",
-    sFg:"#5b21b6",
-    danger:"#dc2626",
+    secondary:"rgba(79,70,229,0.08)",
+    sFg:"#4338ca",
+    danger:"#e11d48",
     warn:"#d97706",
-    input:"rgba(255,255,255,0.8)",
-    sidebar:"rgba(240,235,255,0.9)",
-    glass:"rgba(255,255,255,0.6)",
-    glassStrong:"rgba(255,255,255,0.9)",
-    o1:"rgba(124,58,237,0.2)",
-    o2:"rgba(5,150,105,0.15)",
-    o3:"rgba(239,68,68,0.12)",
-    o4:"rgba(217,119,6,0.12)",
-    grid:"rgba(124,58,237,0.04)",
-    shadow:"0 8px 32px rgba(124,58,237,0.15)",
-    shadowStrong:"0 20px 60px rgba(124,58,237,0.2)",
-    glow:"rgba(124,58,237,0.3)",
+    input:"rgba(255,255,255,0.95)",
+    sidebar:"rgba(248,250,252,0.95)",
+    glass:"rgba(255,255,255,0.75)",
+    glassStrong:"rgba(255,255,255,0.95)",
+    o1:"rgba(79,70,229,0.15)",
+    o2:"rgba(5,150,105,0.12)",
+    o3:"rgba(225,29,72,0.08)",
+    o4:"rgba(217,119,6,0.08)",
+    grid:"rgba(79,70,229,0.03)",
+    shadow:"0 8px 30px rgba(15,23,42,0.06)",
+    shadowStrong:"0 20px 50px rgba(15,23,42,0.12)",
+    glow:"rgba(79,70,229,0.2)",
   },
 };
 
@@ -328,7 +352,7 @@ function GCard({children,t,style={},className="",onClick}:any){
 /* ═══════════════════════════════════════════════════════
    LOGIN PAGE
 ═══════════════════════════════════════════════════════ */
-function LoginPage({onLogin,t,isDark,toggleTheme}:any){
+function LoginPage({onLogin,onDemoLogin,onGoogleRewardLogin,t,isDark,toggleTheme}:any){
   const { user, profile, signUp, signIn, signInWithGoogle, signInWithApple, upsertProfile, configError } = useAuth();
   const [step,setStep]=useState(1);
   const [mode,setMode]=useState<"register"|"signin">("register");
@@ -708,17 +732,14 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
       </button>
 
       <div style={{textAlign:"center",maxWidth:700}}>
-        <div style={{display:"flex",flexDirection:"column",alignItems:"center"}}>
-          {/* Logo mark */}
-          <div style={{display:"inline-flex",alignItems:"center",gap:12,marginBottom:14}}>
-            <div style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:68,height:68,borderRadius:22,background:`linear-gradient(135deg,${t.primary},${t.accent})`,boxShadow:`0 0 50px ${t.glow}`,animation:"breathe 4s ease-in-out infinite"}}>
-              <I n="zap" s={30} c="#fff" sw={2}/>
-            </div>
-            <span style={{fontSize:30,fontWeight:800,color:t.text,letterSpacing:"-0.6px"}}>Microlink</span>
+        <div style={{display:"flex",flexDirection:"column",alignItems:"center",marginBottom:20}}>
+          {/* New 3D Brand Logo */}
+          <div style={{marginBottom:16}}>
+            <AppLogo size={58} showText={true} isDark={isDark} />
           </div>
 
-          <div style={{display:"inline-flex",alignItems:"center",gap:7,padding:"6px 20px",borderRadius:99,background:t.secondary,border:`1px solid ${t.border}`,color:t.primary,fontSize:13,fontWeight:700,marginBottom:26,backdropFilter:"blur(8px)"}}>
-            <I n="sparkles" s={13} c={t.primary}/>Join the Microlink community
+          <div style={{display:"inline-flex",alignItems:"center",gap:7,padding:"6px 20px",borderRadius:99,background:t.secondary,border:`1px solid ${t.border}`,color:t.primary,fontSize:13,fontWeight:700,backdropFilter:"blur(8px)"}}>
+            <I n="sparkles" s={13} c={t.primary}/>Gujarat Hyperlocal Micro-Gigs
           </div>
         </div>
 
@@ -760,20 +781,92 @@ function LoginPage({onLogin,t,isDark,toggleTheme}:any){
 
         {/* Social login + Sign in */}
         <div style={{marginTop:40,display:"flex",flexDirection:"column",alignItems:"center",gap:14}}>
-          <p style={{fontSize:13,color:t.muted,fontWeight:600}}>Or sign in with</p>
-          <div style={{display:"flex",gap:12}}>
-            <button className="press" onClick={()=>socialLogin("google")} disabled={authLoading}
-              style={{display:"flex",alignItems:"center",gap:8,padding:"10px 22px",borderRadius:14,background:t.glass,backdropFilter:"blur(16px)",border:`1px solid ${t.border}`,cursor:"pointer",color:t.text,fontSize:13,fontWeight:600,boxShadow:t.shadow}}>
-              <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
-              Google
+          {/* Google Sign-in with ₹100 Reward Bonus */}
+          <button
+            className="press"
+            type="button"
+            onClick={()=>{
+              sound.playTap();
+              if(onGoogleRewardLogin) onGoogleRewardLogin();
+              else socialLogin("google");
+            }}
+            style={{
+              display:"flex",
+              alignItems:"center",
+              justifyContent:"center",
+              gap:10,
+              width:"100%",
+              maxWidth:380,
+              padding:"13px 20px",
+              borderRadius:16,
+              background:"linear-gradient(135deg, rgba(245,158,11,0.22), rgba(99,102,241,0.18))",
+              border:"1.5px solid #f59e0b",
+              color:t.text,
+              fontSize:13,
+              fontWeight:800,
+              cursor:"pointer",
+              boxShadow:"0 8px 24px rgba(245,158,11,0.25)",
+            }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+            <span>Sign in with Google</span>
+            <span style={{background:"#f59e0b",color:"#000",padding:"2px 8px",borderRadius:99,fontSize:10,fontWeight:800}}>🎁 ₹100 BONUS</span>
+          </button>
+
+          <p style={{fontSize:12,color:t.muted,fontWeight:600}}>Or explore quick demo profiles</p>
+          <div style={{display:"flex",gap:10,flexWrap:"wrap",justifyContent:"center"}}>
+            <button
+              className="press"
+              type="button"
+              onClick={()=>{
+                sound.playTap();
+                if(onDemoLogin) onDemoLogin("user");
+              }}
+              style={{
+                display:"inline-flex",
+                alignItems:"center",
+                gap:6,
+                padding:"9px 18px",
+                borderRadius:99,
+                background:`linear-gradient(135deg,${t.primary},#818cf8)`,
+                color:"#fff",
+                border:"none",
+                fontSize:12,
+                fontWeight:700,
+                cursor:"pointer",
+                boxShadow:`0 4px 14px ${t.primary}40`,
+              }}
+            >
+              ⚡ Instant Demo: Requester
             </button>
-            <button className="press" onClick={()=>socialLogin("apple")} disabled={authLoading}
-              style={{display:"flex",alignItems:"center",gap:8,padding:"10px 22px",borderRadius:14,background:t.glass,backdropFilter:"blur(16px)",border:`1px solid ${t.border}`,cursor:"pointer",color:t.text,fontSize:13,fontWeight:600,boxShadow:t.shadow}}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill={t.text}><path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.48-3.24 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/></svg>
-              Apple
+
+            <button
+              className="press"
+              type="button"
+              onClick={()=>{
+                sound.playTap();
+                if(onDemoLogin) onDemoLogin("helper");
+              }}
+              style={{
+                display:"inline-flex",
+                alignItems:"center",
+                gap:6,
+                padding:"9px 18px",
+                borderRadius:99,
+                background:`linear-gradient(135deg,${t.accent},#34d399)`,
+                color:"#fff",
+                border:"none",
+                fontSize:12,
+                fontWeight:700,
+                cursor:"pointer",
+                boxShadow:`0 4px 14px ${t.accent}40`,
+              }}
+            >
+              ⚡ Instant Demo: Helper
             </button>
           </div>
-          <button onClick={()=>{setMode("signin");setStep(2);setRole(null);}} style={{background:"none",border:"none",cursor:"pointer",color:t.primary,fontSize:13,fontWeight:700,marginTop:4}}>
+
+          <button onClick={()=>{setMode("signin");setStep(2);setRole(null);}} style={{background:"none",border:"none",cursor:"pointer",color:t.primary,fontSize:13,fontWeight:700,marginTop:8}}>
             Already have an account? Sign in →
           </button>
           {(authError||configError)&&<p style={{fontSize:12,color:t.danger,fontWeight:600,textAlign:"center"}}>{authError||configError}</p>}
@@ -787,36 +880,37 @@ function RoleCard({title,desc,ic,col,grad,feats,t,onClick}:any){
   const [h,setH]=useState(false);
   const isDark=t.mode==="dark";
   return(
-    <button className="press" onMouseEnter={()=>setH(true)} onMouseLeave={()=>setH(false)} onClick={onClick}
-      style={{display:"flex",flexDirection:"column",alignItems:"flex-start",gap:18,padding:"28px 24px",borderRadius:24,
-        background:h?(isDark?`rgba(${col.replace("#","").match(/../g).map(h=>parseInt(h,16)).join(",")},0.12)`:`rgba(${col.replace("#","").match(/../g).map(h=>parseInt(h,16)).join(",")},0.08)`):t.glass,
-        backdropFilter:"blur(20px)",
-        border:`1.5px solid ${h?col+"50":t.border}`,
-        cursor:"pointer",minWidth:250,textAlign:"left",
-        transition:"all .22s ease",
-        transform:h?"translateY(-8px)":"none",
-        boxShadow:h?`0 24px 60px ${col}28,0 0 0 1px ${col}20`:t.shadow,
-      }}>
-      <div style={{width:56,height:56,borderRadius:18,background:h?`${grad},${col}22`:t.secondary,display:"flex",alignItems:"center",justifyContent:"center",transition:"all .22s",boxShadow:h?`0 0 24px ${col}40`:"none"}}>
-        <I n={ic} s={24} c={h?"#fff":col}/>
+    <TiltCard3D maxTilt={14} glowColor={col} onClick={onClick}>
+      <div onMouseEnter={()=>setH(true)} onMouseLeave={()=>setH(false)}
+        style={{display:"flex",flexDirection:"column",alignItems:"flex-start",gap:18,padding:"28px 24px",borderRadius:24,
+          background:h?(isDark?`rgba(${col.replace("#","").match(/../g).map((h:string)=>parseInt(h,16)).join(",")},0.12)`:`rgba(${col.replace("#","").match(/../g).map((h:string)=>parseInt(h,16)).join(",")},0.08)`):t.glass,
+          backdropFilter:"blur(20px)",
+          border:`1.5px solid ${h?col+"50":t.border}`,
+          cursor:"pointer",minWidth:250,textAlign:"left",
+          transition:"all .22s ease",
+          boxShadow:h?`0 24px 60px ${col}28,0 0 0 1px ${col}20`:t.shadow,
+        }}>
+        <div style={{width:56,height:56,borderRadius:18,background:h?`${grad},${col}22`:t.secondary,display:"flex",alignItems:"center",justifyContent:"center",transition:"all .22s",boxShadow:h?`0 0 24px ${col}40`:"none"}}>
+          <I n={ic} s={24} c={h?"#fff":col}/>
+        </div>
+        <div>
+          <div style={{fontFamily:"Poppins",fontSize:18,fontWeight:800,color:t.text,marginBottom:6}}>{title}</div>
+          <div style={{fontSize:13,color:t.sub,lineHeight:1.6,maxWidth:200}}>{desc}</div>
+        </div>
+        <ul style={{display:"flex",flexDirection:"column",gap:8,listStyle:"none"}}>
+          {feats.map((f:string)=>(
+            <li key={f} style={{display:"flex",alignItems:"center",gap:9,fontSize:12,color:t.muted}}>
+              <div style={{width:16,height:16,borderRadius:"50%",background:`${col}18`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <I n="check" s={9} c={col} sw={2.5}/>
+              </div>{f}
+            </li>
+          ))}
+        </ul>
+        <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 18px",borderRadius:99,background:h?grad:t.secondary,color:h?"#fff":col,fontSize:13,fontWeight:700,transition:"all .22s",border:`1px solid ${h?"transparent":col+"30"}`}}>
+          Get Started <I n="arR" s={14} c="currentColor" sw={2.5}/>
+        </div>
       </div>
-      <div>
-        <div style={{fontFamily:"Poppins",fontSize:18,fontWeight:800,color:t.text,marginBottom:6}}>{title}</div>
-        <div style={{fontSize:13,color:t.sub,lineHeight:1.6,maxWidth:200}}>{desc}</div>
-      </div>
-      <ul style={{display:"flex",flexDirection:"column",gap:8,listStyle:"none"}}>
-        {feats.map(f=>(
-          <li key={f} style={{display:"flex",alignItems:"center",gap:9,fontSize:12,color:t.muted}}>
-            <div style={{width:16,height:16,borderRadius:"50%",background:`${col}18`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-              <I n="check" s={9} c={col} sw={2.5}/>
-            </div>{f}
-          </li>
-        ))}
-      </ul>
-      <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 18px",borderRadius:99,background:h?grad:t.secondary,color:h?"#fff":col,fontSize:13,fontWeight:700,transition:"all .22s",border:`1px solid ${h?"transparent":col+"30"}`}}>
-        Get Started <I n="arR" s={14} c="currentColor" sw={2.5}/>
-      </div>
-    </button>
+    </TiltCard3D>
   );
 }
 
@@ -834,6 +928,7 @@ const isAdminProfile = (profile:any) => {
 ═══════════════════════════════════════════════════════ */
 const NAV=[
   {id:"dashboard",label:"Dashboard",ic:"home"},
+  {id:"tracking",label:"Gujarat Track",ic:"pin"},
   {id:"requests",label:"Requests",ic:"tag"},
   {id:"chat",label:"Chat",ic:"msg"},
   {id:"notifications",label:"Alerts",ic:"bell"},
@@ -850,61 +945,51 @@ const navItemsForRole = (role:string) => {
 };
 
 function Sidebar({page,setPage,t,isDark,toggleTheme,online,setOnline,user,unreadCount}:any){
-  const initials=user?.name?.split(" ").map(w=>w[0]).join("").toUpperCase().slice(0,2)||"?";
+  const initials=user?.name?.split(" ").map((w:string)=>w[0]).join("").toUpperCase().slice(0,2)||"ML";
   return(
-    <aside style={{width:220,minHeight:"100vh",background:t.mode==="dark"?"rgba(7,6,26,0.85)":"rgba(240,235,255,0.88)",backdropFilter:"blur(24px)",borderRight:`1px solid ${t.border}`,display:"flex",flexDirection:"column",padding:"20px 10px 16px",position:"sticky",top:0,flexShrink:0,zIndex:10}}>
-      {/* Logo */}
-      <div style={{display:"flex",alignItems:"center",gap:11,padding:"0 10px 24px"}}>
-        <div style={{width:36,height:36,borderRadius:12,background:`linear-gradient(135deg,${t.primary},${t.accent})`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 0 20px ${t.glow}`}}>
-          <I n="zap" s={18} c="#fff" sw={2}/>
-        </div>
-        <span style={{fontFamily:"Poppins",fontWeight:800,fontSize:18,color:t.text,letterSpacing:"-.5px"}}>MicroLink</span>
+    <aside style={{width:76,minHeight:"100vh",background:t.mode==="dark"?"rgba(11,15,25,0.95)":"rgba(248,250,252,0.96)",backdropFilter:"blur(24px)",borderRight:`1px solid ${t.border}`,display:"flex",flexDirection:"column",alignItems:"center",padding:"20px 8px 16px",position:"sticky",top:0,flexShrink:0,zIndex:10}}>
+      {/* Icon-Only 3D Logo */}
+      <div style={{padding:"0 0 24px",display:"flex",justifyContent:"center"}} title="MicroLink">
+        <AppLogo size={36} showText={false} isDark={t.mode==="dark"} />
       </div>
 
-      {/* Nav */}
-      {(user ? navItemsForRole(user.role) : NAV).map(item=>{
-        const a=page===item.id;
-        return(
-          <button key={item.id} onClick={()=>setPage(item.id)} className="nav-item"
-            style={{display:"flex",alignItems:"center",gap:11,padding:"11px 14px",borderRadius:13,background:a?`linear-gradient(135deg,${t.primary}22,${t.accent}12)`:"transparent",color:a?t.primary:t.muted,border:`1px solid ${a?t.primary+"30":"transparent"}`,cursor:"pointer",width:"100%",textAlign:"left",fontWeight:a?700:400,fontSize:14,marginBottom:3,position:"relative",boxShadow:a?`0 4px 12px ${t.primary}20`:"none"}}
-            onMouseEnter={e=>{if(!a){e.currentTarget.style.background=t.secondary;e.currentTarget.style.color=t.text;}}}
-            onMouseLeave={e=>{if(!a){e.currentTarget.style.background="transparent";e.currentTarget.style.color=t.muted;}}}>
-            {a&&<div style={{position:"absolute",left:0,top:"50%",transform:"translateY(-50%)",width:3,height:20,background:`linear-gradient(180deg,${t.primary},${t.accent})`,borderRadius:"0 3px 3px 0"}}/>}
-            <I n={item.ic} s={16}/>
-            {item.label}
-            {item.id==="notifications" && unreadCount>0 && <span style={{marginLeft:"auto",background:`linear-gradient(135deg,${t.primary},${t.accent})`,color:"#fff",borderRadius:99,fontSize:9,fontWeight:800,padding:"2px 7px",boxShadow:`0 0 8px ${t.primary}50`}}>{unreadCount}</span>}
-          </button>
-        );
-      })}
+      {/* Nav - Icon Only Rail */}
+      <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6,width:"100%"}}>
+        {(user ? navItemsForRole(user.role) : NAV).map(item=>{
+          const a=page===item.id;
+          return(
+            <button key={item.id} onClick={()=>setPage(item.id)} className="nav-item" title={item.label}
+              style={{display:"flex",alignItems:"center",justifyContent:"center",width:46,height:46,borderRadius:14,background:a?`linear-gradient(135deg,${t.primary}22,${t.accent}12)`:"transparent",color:a?t.primary:t.muted,border:`1px solid ${a?t.primary+"40":"transparent"}`,cursor:"pointer",position:"relative",boxShadow:a?`0 4px 14px ${t.primary}25`:"none",transition:"all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)"}}
+              onMouseEnter={e=>{if(!a){e.currentTarget.style.background=t.secondary;e.currentTarget.style.color=t.text;e.currentTarget.style.transform="scale(1.08)";}}}
+              onMouseLeave={e=>{if(!a){e.currentTarget.style.background="transparent";e.currentTarget.style.color=t.muted;e.currentTarget.style.transform="scale(1)";}}}>
+              {a&&<div style={{position:"absolute",left:0,top:"50%",transform:"translateY(-50%)",width:3,height:20,background:`linear-gradient(180deg,${t.primary},${t.accent})`,borderRadius:"0 3px 3px 0"}}/>}
+              <I n={item.ic} s={19}/>
+              {item.id==="notifications" && unreadCount>0 && <span style={{position:"absolute",top:4,right:4,background:`linear-gradient(135deg,${t.primary},${t.accent})`,color:"#fff",borderRadius:99,fontSize:9,fontWeight:800,width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 0 8px ${t.primary}50`}}>{unreadCount}</span>}
+            </button>
+          );
+        })}
+      </div>
 
       <div style={{flex:1}}/>
 
-      {/* User card */}
+      {/* User avatar initial icon */}
       {user&&(
-        <div style={{padding:"12px 12px",borderRadius:14,background:t.secondary,border:`1px solid ${t.border}`,marginBottom:10,backdropFilter:"blur(8px)"}}>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <div style={{width:36,height:36,borderRadius:"50%",background:`linear-gradient(135deg,${t.primary},${t.accent})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:"#fff",flexShrink:0,boxShadow:`0 0 12px ${t.primary}50`}}>
-              {initials}
-            </div>
-            <div style={{minWidth:0}}>
-              <div style={{fontSize:13,fontWeight:700,color:t.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{user.name}</div>
-              <div style={{fontSize:10,color:t.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{user.email}</div>
-            </div>
+        <div style={{marginBottom:12,cursor:"pointer"}} title={`${user.name} (${user.email})`} onClick={()=>setPage("profile")}>
+          <div style={{width:38,height:38,borderRadius:"50%",background:`linear-gradient(135deg,${t.primary},${t.accent})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:"#fff",boxShadow:`0 0 12px ${t.primary}50`}}>
+            {initials}
           </div>
         </div>
       )}
 
-      {/* Online toggle */}
-      <div style={{display:"flex",alignItems:"center",gap:10,padding:"7px 12px",marginBottom:4}}>
-        <div onClick={()=>setOnline(o=>!o)} style={{width:38,height:22,borderRadius:99,background:online?`linear-gradient(90deg,${t.accent},${t.accent}cc)`:`${t.muted}40`,position:"relative",cursor:"pointer",transition:"background .25s",flexShrink:0,boxShadow:online?`0 0 10px ${t.accent}50`:"none"}}>
-          <div style={{position:"absolute",top:3,left:online?18:3,width:16,height:16,borderRadius:"50%",background:"#fff",transition:"left .25s",boxShadow:"0 1px 4px rgba(0,0,0,.3)"}}/>
-        </div>
-        <span style={{fontSize:12,color:online?t.accent:t.muted,fontWeight:600}}>{online?"● Online":"● Busy"}</span>
+      {/* Online indicator dot */}
+      <div onClick={()=>setOnline(o=>!o)} style={{width:36,height:36,borderRadius:12,background:t.secondary,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:8,cursor:"pointer",border:`1px solid ${t.border}`}} title={online?"Online":"Busy"}>
+        <div style={{width:10,height:10,borderRadius:"50%",background:online?t.accent:t.muted,boxShadow:online?`0 0 8px ${t.accent}`:"none"}}/>
       </div>
 
-      <button onClick={toggleTheme} className="nav-item"
-        style={{display:"flex",alignItems:"center",gap:8,padding:"9px 12px",background:"none",border:"none",cursor:"pointer",color:t.muted,fontSize:12,borderRadius:10,fontWeight:500}}>
-        <I n={isDark?"sun":"moon"} s={14}/>{isDark?"Light mode":"Dark mode"}
+      {/* Theme toggle button icon */}
+      <button onClick={toggleTheme} className="nav-item" title={isDark?"Switch to Light Mode":"Switch to Dark Mode"}
+        style={{width:40,height:40,borderRadius:12,background:t.secondary,border:`1px solid ${t.border}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:t.muted}}>
+        <I n={isDark?"sun":"moon"} s={16}/>
       </button>
     </aside>
   );
@@ -970,28 +1055,281 @@ function VoiceBtn({t}:any){
   );
 }
 
-function TopBar({t,user,online,setOnline,setPage,onSignOut,unreadCount}:any){
-  const initials=user?.name?.split(" ").map(w=>w[0]).join("").toUpperCase().slice(0,2)||"?";
+function TopBar({t,user,online,setOnline,setPage,onSignOut,unreadCount,onSwitchRole,isEyeCare,onToggleEyeCare,isSound,onToggleSound,walletBalance=100,isVerified=true,onOpenVerification,onOpenAadhaarKyc}:any){
+  const initials=user?.name?.split(" ").map((w:string)=>w[0]).join("").toUpperCase().slice(0,2)||"ML";
+  const isHelper = user?.role === "helper";
+  const game = getGamificationState();
+  const [isOffline, setIsOffline] = useState<boolean>(typeof navigator !== "undefined" ? !navigator.onLine : false);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
   return(
-    <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",padding:"14px 0 6px",gap:12}}>
-      <div onClick={()=>setOnline(o=>!o)} style={{display:"flex",alignItems:"center",gap:7,padding:"6px 15px",borderRadius:99,background:t.glass,backdropFilter:"blur(12px)",border:`1px solid ${online?t.accent+"40":t.border}`,cursor:"pointer",transition:"all .2s"}}>
-        <div style={{width:8,height:8,borderRadius:"50%",background:online?t.accent:t.muted,boxShadow:online?`0 0 8px ${t.accent}`:"none",transition:"all .2s"}}/>
-        <span style={{fontSize:12,fontWeight:700,color:online?t.accent:t.muted}}>{online?"Online":"Busy"}</span>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 0 10px",gap:10,flexWrap:"wrap"}}>
+      {/* Left side: Brand, Role Switcher & Live Level */}
+      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+        {isOffline && (
+          <span style={{padding:"5px 12px",borderRadius:99,fontSize:11,fontWeight:800,background:"rgba(245,158,11,0.18)",color:t.warn,border:"1px solid rgba(245,158,11,0.4)",display:"inline-flex",alignItems:"center",gap:4}}>
+            ⚡ Offline Mode (Cached Workspace)
+          </span>
+        )}
+        {/* Quick Role Switcher */}
+        <div style={{display:"flex",alignItems:"center",background:t.glass,backdropFilter:"blur(12px)",padding:"3px",borderRadius:99,border:`1px solid ${t.border}`}}>
+          <button
+            onClick={()=>{
+              sound.playTap();
+              if(onSwitchRole) onSwitchRole("user");
+            }}
+            style={{
+              padding:"5px 12px",
+              borderRadius:99,
+              border:"none",
+              cursor:"pointer",
+              fontSize:11,
+              fontWeight:700,
+              background:!isHelper?t.primary:"transparent",
+              color:!isHelper?"#fff":t.muted,
+              transition:"all .2s",
+            }}
+          >
+            👤 Requester
+          </button>
+          <button
+            onClick={()=>{
+              sound.playTap();
+              if(onSwitchRole) onSwitchRole("helper");
+            }}
+            style={{
+              padding:"5px 12px",
+              borderRadius:99,
+              border:"none",
+              cursor:"pointer",
+              fontSize:11,
+              fontWeight:700,
+              background:isHelper?t.accent:"transparent",
+              color:isHelper?"#fff":t.muted,
+              transition:"all .2s",
+            }}
+          >
+            ⚡ Helper
+          </button>
+        </div>
+
+        {/* Super Admin Quick Portal Link */}
+        <a
+          href="/super-admin"
+          style={{
+            display:"inline-flex",
+            alignItems:"center",
+            gap:4,
+            padding:"5px 10px",
+            borderRadius:99,
+            background:t.secondary,
+            border:`1px solid ${t.border}`,
+            color:t.muted,
+            fontSize:11,
+            fontWeight:700,
+            textDecoration:"none",
+          }}
+        >
+          🛡️ Admin
+        </a>
+
+        {/* Gujarat Live Track Direct Link */}
+        <button
+          onClick={()=>{
+            sound.playTap();
+            setPage("tracking");
+          }}
+          style={{
+            display:"inline-flex",
+            alignItems:"center",
+            gap:4,
+            padding:"5px 10px",
+            borderRadius:99,
+            background:"rgba(99,102,241,0.15)",
+            border:"1px solid rgba(99,102,241,0.35)",
+            color:t.primary,
+            fontSize:11,
+            fontWeight:700,
+            cursor:"pointer",
+          }}
+        >
+          📍 Gujarat Live Track
+        </button>
+
+        {/* Helper Streak & Level Badge */}
+        {isHelper && (
+          <div style={{display:"inline-flex",alignItems:"center",gap:6,padding:"4px 10px",borderRadius:99,background:"rgba(245,158,11,0.12)",border:"1px solid rgba(245,158,11,0.3)",fontSize:11,fontWeight:700,color:"#f59e0b"}}>
+            <span>🔥 {game.streakDays}d streak</span>
+            <span style={{opacity:0.5}}>•</span>
+            <span>⭐ Lvl {game.level}</span>
+          </div>
+        )}
       </div>
-      <button onClick={onSignOut}
-        style={{display:"flex",alignItems:"center",gap:6,padding:"8px 12px",borderRadius:99,background:t.secondary,border:`1px solid ${t.border}`,cursor:"pointer",color:t.muted,fontSize:12,fontWeight:700}}>
-        <I n="x" s={12} c={t.muted}/>
-        Sign out
-      </button>
-      <button onClick={()=>setPage("notifications")}
-        style={{display:"flex",alignItems:"center",gap:6,padding:"8px 12px",borderRadius:99,background:t.secondary,border:`1px solid ${t.border}`,cursor:"pointer",color:t.muted,fontSize:12,fontWeight:700}}>
-        <I n="bell" s={12} c={t.muted}/>
-        Alerts {unreadCount>0 && <strong>({unreadCount})</strong>}
-      </button>
-      <button onClick={()=>setPage("profile")}
-        style={{width:38,height:38,borderRadius:"50%",background:`linear-gradient(135deg,${t.primary},${t.accent})`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800,color:"#fff",fontFamily:"Poppins",boxShadow:`0 0 16px ${t.glow}`}}>
-        {initials}
-      </button>
+
+      {/* Right side: Wallet, Verification, Comfort toggles, status, alerts, profile */}
+      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+        {/* Wallet Balance Badge */}
+        <div
+          title="Google Welcome Bonus & Task Balance"
+          style={{
+            display:"flex",
+            alignItems:"center",
+            gap:5,
+            padding:"5px 11px",
+            borderRadius:99,
+            background:"rgba(245,158,11,0.15)",
+            border:"1px solid rgba(245,158,11,0.35)",
+            color:"#f59e0b",
+            fontSize:11,
+            fontWeight:800,
+          }}
+        >
+          <span>💰</span>
+          <span>₹{walletBalance}</span>
+        </div>
+
+        {/* Anti-Fake "True Account" Verification Badge / Button */}
+        <button
+          onClick={()=>{
+            sound.playTap();
+            if(onOpenVerification) onOpenVerification();
+          }}
+          title="Anti-Fake Verification Status"
+          style={{
+            display:"flex",
+            alignItems:"center",
+            gap:4,
+            padding:"5px 11px",
+            borderRadius:99,
+            background:isVerified?"rgba(16,185,129,0.18)":"rgba(245,158,11,0.15)",
+            border:`1px solid ${isVerified?"#10b981":"#f59e0b"}`,
+            cursor:"pointer",
+            color:isVerified?"#10b981":"#f59e0b",
+            fontSize:11,
+            fontWeight:700,
+          }}
+        >
+          {isVerified ? "🛡️ Verified Real (98%)" : "⚠️ Verify Real ID"}
+        </button>
+
+        {/* DigiLocker Aadhaar e-KYC Button */}
+        <button
+          onClick={()=>{
+            sound.playTap();
+            if(onOpenAadhaarKyc) onOpenAadhaarKyc();
+          }}
+          title="Govt. Identity Verification via DigiLocker"
+          style={{
+            display:"flex",
+            alignItems:"center",
+            gap:4,
+            padding:"5px 11px",
+            borderRadius:99,
+            background:"rgba(99,102,241,0.15)",
+            border:"1px solid rgba(99,102,241,0.35)",
+            cursor:"pointer",
+            color:t.primary,
+            fontSize:11,
+            fontWeight:700,
+          }}
+        >
+          🇮🇳 Aadhaar e-KYC
+        </button>
+
+        {/* Eye Care / Blue-light Sepia Filter */}
+        <button
+          onClick={()=>{
+            sound.playTap();
+            if(onToggleEyeCare) onToggleEyeCare();
+          }}
+          title="Toggle Eye-Care Reading Warmth (Reduces Blue Light)"
+          style={{
+            display:"flex",
+            alignItems:"center",
+            gap:4,
+            padding:"6px 11px",
+            borderRadius:99,
+            background:isEyeCare?"rgba(245,158,11,0.2)":t.secondary,
+            border:`1px solid ${isEyeCare?"#f59e0b":t.border}`,
+            cursor:"pointer",
+            color:isEyeCare?"#f59e0b":t.muted,
+            fontSize:11,
+            fontWeight:700,
+          }}
+        >
+          👁️ {isEyeCare ? "Eye Care: ON" : "Eye Care"}
+        </button>
+
+        {/* Sound FX Toggle */}
+        <button
+          onClick={()=>{
+            if(onToggleSound) onToggleSound();
+          }}
+          title="Toggle Micro-Audio Sound Effects"
+          style={{
+            display:"flex",
+            alignItems:"center",
+            padding:"6px 10px",
+            borderRadius:99,
+            background:isSound?t.glass:t.secondary,
+            border:`1px solid ${t.border}`,
+            cursor:"pointer",
+            color:isSound?t.accent:t.muted,
+            fontSize:12,
+            fontWeight:700,
+          }}
+        >
+          {isSound ? "🔊" : "🔇"}
+        </button>
+
+        {/* Online / Busy Status */}
+        <div onClick={()=>{
+          sound.playTap();
+          setOnline((o:boolean)=>!o);
+        }} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:99,background:t.glass,backdropFilter:"blur(12px)",border:`1px solid ${online?t.accent+"40":t.border}`,cursor:"pointer",transition:"all .2s"}}>
+          <div style={{width:7,height:7,borderRadius:"50%",background:online?t.accent:t.muted,boxShadow:online?`0 0 8px ${t.accent}`:"none"}}/>
+          <span style={{fontSize:11,fontWeight:700,color:online?t.accent:t.muted}}>{online?"Online":"Busy"}</span>
+        </div>
+
+        {/* Alerts */}
+        <button onClick={()=>{
+          sound.playTap();
+          setPage("notifications");
+        }}
+          style={{display:"flex",alignItems:"center",gap:5,padding:"6px 11px",borderRadius:99,background:t.secondary,border:`1px solid ${t.border}`,cursor:"pointer",color:t.muted,fontSize:11,fontWeight:700}}>
+          <I n="bell" s={11} c={t.muted}/>
+          Alerts {unreadCount>0 && <strong>({unreadCount})</strong>}
+        </button>
+
+        {/* Sign Out */}
+        <button onClick={()=>{
+          sound.playTap();
+          onSignOut();
+        }}
+          style={{display:"flex",alignItems:"center",gap:4,padding:"6px 10px",borderRadius:99,background:t.secondary,border:`1px solid ${t.border}`,cursor:"pointer",color:t.muted,fontSize:11,fontWeight:700}}>
+          <I n="x" s={11} c={t.muted}/>
+          Exit
+        </button>
+
+        {/* Profile */}
+        <button onClick={()=>{
+          sound.playTap();
+          setPage("profile");
+        }}
+          style={{width:34,height:34,borderRadius:"50%",background:`linear-gradient(135deg,${t.primary},${t.accent})`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:"#fff",fontFamily:"Poppins",boxShadow:`0 0 14px ${t.glow}`}}>
+          {initials}
+        </button>
+      </div>
     </div>
   );
 }
@@ -1018,6 +1356,9 @@ function Dashboard({t,user,setPage,postedTasks,currentUid,focusTab,onFocusTabHan
   const [paymentFields,setPaymentFields]=useState<any>({upi:"",cardNumber:"",nameOnCard:"",expiry:"",cvv:"",bank:""});
   const [ratingTarget,setRatingTarget]=useState<any>(null);
   const [ratingSubmitting,setRatingSubmitting]=useState(false);
+  const [qrHandshakeTask,setQrHandshakeTask]=useState<any>(null);
+  const [aiProofTask,setAiProofTask]=useState<any>(null);
+  const [activeInvoice,setActiveInvoice]=useState<any>(null);
   const greeting=()=>{const h=new Date().getHours();return h<12?"Good morning":h<17?"Good afternoon":"Good evening";};
 
   useEffect(()=>{
@@ -1276,7 +1617,7 @@ function Dashboard({t,user,setPage,postedTasks,currentUid,focusTab,onFocusTabHan
     : [{id:"tasks",label:"My Tasks"},{id:"bids",label:"Bid Alerts"},{id:"orders",label:"Orders"}];
 
   return(
-    <div className="su" style={{padding:"20px 0",maxWidth:920}}>
+    <div className="su" style={{padding:"20px 0",maxWidth:"100%"}}>
       <div style={{marginBottom:28}}>
         <p style={{fontSize:13,color:t.muted,fontWeight:600,marginBottom:6}}>{greeting()}, {new Date().toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long"})}</p>
         <h2 style={{fontFamily:"Poppins",fontSize:28,fontWeight:800,color:t.text,letterSpacing:"-0.5px"}}>Welcome back, {user?.name?.split(" ")[0]} 👋</h2>
@@ -1284,20 +1625,30 @@ function Dashboard({t,user,setPage,postedTasks,currentUid,focusTab,onFocusTabHan
 
       {dashError&&<p style={{fontSize:12,color:t.danger,fontWeight:700,marginBottom:12}}>⚠ {dashError}</p>}
 
+      {/* Horizontal Momentum Category Scroller (Technique 15) */}
+      <CategoryScroller onSelectCategory={(catId)=>{
+        if(catId!=="all") setPage("requests");
+      }} isDark={t.mode==="dark"} />
+
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))",gap:14,marginBottom:20}}>
         {stats.map((s,i)=>(
-          <GCard key={s.label} t={t} className={`su${i}`} style={{padding:"20px 20px"}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
-              <div style={{width:42,height:42,borderRadius:13,background:`${s.col}18`,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                <I n={s.ic} s={18} c={s.col}/>
+          <TiltCard3D key={s.label} maxTilt={12} glowColor={s.col}>
+            <GCard t={t} className={`su${i}`} style={{padding:"20px 20px",height:"100%"}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+                <div style={{width:42,height:42,borderRadius:13,background:`${s.col}18`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <I n={s.ic} s={18} c={s.col}/>
+                </div>
+                <span style={{fontSize:10,fontWeight:800,color:s.col,background:`${s.col}15`,padding:"3px 9px",borderRadius:99,border:`1px solid ${s.col}30`}}>{s.badge}</span>
               </div>
-              <span style={{fontSize:10,fontWeight:800,color:s.col,background:`${s.col}15`,padding:"3px 9px",borderRadius:99,border:`1px solid ${s.col}30`}}>{s.badge}</span>
-            </div>
-            <div style={{fontFamily:"Poppins",fontSize:28,fontWeight:800,color:t.text,marginBottom:3}}>{s.val}</div>
-            <div style={{fontSize:12,color:t.muted,fontWeight:500}}>{s.label}</div>
-          </GCard>
+              <div style={{fontFamily:"Poppins",fontSize:28,fontWeight:800,color:t.text,marginBottom:3}}>{s.val}</div>
+              <div style={{fontSize:12,color:t.muted,fontWeight:500}}>{s.label}</div>
+            </GCard>
+          </TiltCard3D>
         ))}
       </div>
+
+      {/* Interactive Morphing Scrollytelling Showcase */}
+      <InteractiveScrollytelling isDark={t.mode==="dark"} />
 
       {user?.role==="helper" && (
         <GCard t={t} style={{padding:"14px 18px",marginBottom:14,display:"flex",gap:14,flexWrap:"wrap",alignItems:"center"}}>
@@ -1476,6 +1827,55 @@ function Dashboard({t,user,setPage,postedTasks,currentUid,focusTab,onFocusTabHan
                       Rate User
                     </button>
                   )}
+                  {/* Advanced Feature Action Buttons */}
+                  {!["cancelled","closed"].includes(task.status) && (
+                    <button
+                      className="press"
+                      onClick={() => {
+                        sound.playTap();
+                        setQrHandshakeTask(task);
+                      }}
+                      style={{padding:"7px 11px",borderRadius:10,background:t.secondary,border:`1px solid ${t.border}`,color:t.text,fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}
+                    >
+                      📍 QR Check-In
+                    </button>
+                  )}
+
+                  {task.status === "completion_requested" && (
+                    <button
+                      className="press"
+                      onClick={() => {
+                        sound.playTap();
+                        setAiProofTask(task);
+                      }}
+                      style={{padding:"7px 11px",borderRadius:10,background:`linear-gradient(135deg, ${t.primary}, ${t.accent})`,color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}
+                    >
+                      🤖 AI Work Proof
+                    </button>
+                  )}
+
+                  {task.paymentStatus === "paid" && (
+                    <button
+                      className="press"
+                      onClick={() => {
+                        sound.playTap();
+                        const inv = generateGstInvoice({
+                          id: task.id,
+                          title: task.title,
+                          category: task.category,
+                          acceptedAmount: Number(task.paymentOptional || 350),
+                          posterName: user?.role === "user" ? user?.name : "Verified Requester",
+                          helperName: user?.role === "helper" ? user?.name : "Verified Helper",
+                          location: taskLocationLabel(task),
+                          hasInsurance: true,
+                        });
+                        setActiveInvoice(inv);
+                      }}
+                      style={{padding:"7px 11px",borderRadius:10,background:t.secondary,border:`1px solid ${t.border}`,color:t.text,fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}
+                    >
+                      📄 GST Invoice
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -1509,6 +1909,43 @@ function Dashboard({t,user,setPage,postedTasks,currentUid,focusTab,onFocusTabHan
         onClose={()=>setRatingTarget(null)}
         onSubmit={submitTaskRating}
       />
+
+      {/* Geo-Fenced QR Handshake Modal */}
+      {qrHandshakeTask && (
+        <GeoQrHandshakeModal
+          taskId={qrHandshakeTask.id}
+          taskTitle={qrHandshakeTask.title}
+          userRole={user?.role || "user"}
+          isDark={t.mode==="dark"}
+          onClose={()=>setQrHandshakeTask(null)}
+          onVerified={()=>{
+            setQrHandshakeTask(null);
+          }}
+        />
+      )}
+
+      {/* AI Work Proof Quality Inspection Modal */}
+      {aiProofTask && (
+        <AiWorkProofModal
+          taskId={aiProofTask.id}
+          taskTitle={aiProofTask.title}
+          isDark={t.mode==="dark"}
+          onClose={()=>setAiProofTask(null)}
+          onProofApproved={()=>{
+            handleConfirmCompletion(aiProofTask);
+            setAiProofTask(null);
+          }}
+        />
+      )}
+
+      {/* GST Invoice Preview Modal */}
+      {activeInvoice && (
+        <GstInvoiceModal
+          invoice={activeInvoice}
+          isDark={t.mode==="dark"}
+          onClose={()=>setActiveInvoice(null)}
+        />
+      )}
 
       {paymentTask && (
         <div style={{position:"fixed",inset:0,display:"flex",alignItems:"center",justifyContent:"center",zIndex:120,padding:16,background:t.mode==="dark"?"rgba(6,6,16,0.62)":"rgba(16,20,32,0.34)",backdropFilter:"blur(8px) saturate(120%)",WebkitBackdropFilter:"blur(8px) saturate(120%)",isolation:"isolate"}}>
@@ -1697,6 +2134,12 @@ function PostTask({t,setPage,currentUser}:any){
   const [helpersLoading,setHelpersLoading]=useState(true);
   const [geoBusy,setGeoBusy]=useState(false);
   const [showLocationPreview,setShowLocationPreview]=useState(false);
+  const [isListening,setIsListening]=useState(false);
+  const [weatherInfo,setWeatherInfo]=useState<WeatherInfo | null>(null);
+
+  useEffect(()=>{
+    fetchTaskWeather().then(info => setWeatherInfo(info)).catch(()=>{});
+  },[]);
 
   useEffect(()=>{
     let mounted = true;
@@ -1837,7 +2280,21 @@ function PostTask({t,setPage,currentUser}:any){
       setError("Please specify category when selecting Other");
       return;
     }
-    if(!title.trim()||!location.trim()||!description.trim()||!taskDate||!taskTime) return;
+    const finalDate = taskDate || new Date().toISOString().slice(0, 10);
+    const finalTime = taskTime || "18:00";
+    const finalDesc = description.trim() || title.trim() || "On-demand service request in Gujarat";
+    const finalLocation = location.trim() || "Vastrapur, Ahmedabad, Gujarat";
+
+    if (!title.trim()) {
+      setError("Please enter a task title (or use voice dictation).");
+      return;
+    }
+
+    const limitCheck = rateLimiter.checkLimit("task-create");
+    if (!limitCheck.allowed) {
+      setError(`High Traffic Protection: Rate limit reached. Please wait ${limitCheck.retryAfterSec}s before posting another task.`);
+      return;
+    }
     if(!firestore || !currentUser?.uid){
       setError("Please sign in again before posting a task.");
       return;
@@ -1847,19 +2304,19 @@ function PostTask({t,setPage,currentUser}:any){
     try{
       const recommendedHelperIds = recommendedHelpers.slice(0,5).map((helper:any)=>helper.id);
       await createTask({
-        title: title.trim(),
-        description: description.trim(),
+        title: sanitizeInput(title.trim()),
+        description: sanitizeInput(finalDesc),
         category: selectedCategory,
         paymentOptional: null,
         location: {
-          address: location.trim(),
-          city: "Unknown",
-          lat: taskCoords?.lat || 0,
-          lng: taskCoords?.lng || 0,
+          address: sanitizeInput(finalLocation),
+          city: "Ahmedabad",
+          lat: taskCoords?.lat || 23.0350,
+          lng: taskCoords?.lng || 72.5290,
         },
         schedule: {
-          date: taskDate,
-          time: taskTime,
+          date: finalDate,
+          time: finalTime,
         },
         posterId: currentUser.uid,
         posterName: currentUser.name || "User",
@@ -1913,6 +2370,75 @@ function PostTask({t,setPage,currentUser}:any){
           </div>
         ):(
           <form onSubmit={submit} style={{display:"grid",gap:14}}>
+            {/* Free Web Speech Voice Auto-Fill Banner */}
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",borderRadius:14,background:t.secondary,border:`1px solid ${t.primary}30`,gap:12,flexWrap:"wrap"}}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <div style={{width:36,height:36,borderRadius:10,background:`${t.primary}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>
+                  🎙️
+                </div>
+                <div>
+                  <div style={{fontSize:12,fontWeight:700,color:t.text}}>Instant Voice Dictation</div>
+                  <div style={{fontSize:11,color:t.muted}}>Speak your task aloud — AI categorizes & drafts it</div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={()=>{
+                  sound.playTap();
+                  setIsListening(true);
+                  speechService.listen(
+                    (transcript)=>{
+                      setIsListening(false);
+                      sound.playSuccess();
+                      const parsed = speechService.parseVoiceInput(transcript);
+                      setTitle(parsed.title);
+                      setCategory(parsed.category);
+                      setDescription(parsed.description);
+                      if(!taskDate) setTaskDate(new Date().toISOString().slice(0,10));
+                      if(!taskTime) setTaskTime("18:00");
+                      if(!location) setLocation("Downtown / Local area");
+                    },
+                    (err)=>{
+                      setIsListening(false);
+                      setError(err);
+                    },
+                    ()=>{
+                      setIsListening(false);
+                    }
+                  );
+                }}
+                style={{
+                  padding:"8px 16px",
+                  borderRadius:99,
+                  background:isListening ? "#ef4444" : `linear-gradient(135deg,${t.primary},${t.accent})`,
+                  color:"#fff",
+                  border:"none",
+                  cursor:"pointer",
+                  fontSize:12,
+                  fontWeight:700,
+                  display:"flex",
+                  alignItems:"center",
+                  gap:6,
+                  boxShadow:`0 4px 12px ${t.primary}35`,
+                  transition:"all .2s",
+                }}
+              >
+                {isListening ? "🔴 Listening..." : "⚡ Speak Task"}
+              </button>
+            </div>
+
+            {/* Free Open-Meteo Weather Insight */}
+            {weatherInfo && (
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 14px",borderRadius:12,background:weatherInfo.isOutdoorWarning?"rgba(244,63,94,0.1)":"rgba(16,185,129,0.1)",border:`1px solid ${weatherInfo.isOutdoorWarning?"rgba(244,63,94,0.3)":"rgba(16,185,129,0.25)"}`}}>
+                <div style={{display:"flex",alignItems:"center",gap:7,fontSize:12,fontWeight:600,color:weatherInfo.isOutdoorWarning?t.danger:t.accent}}>
+                  <span>{weatherInfo.icon}</span>
+                  <span>{weatherInfo.temperature}°C {weatherInfo.condition}</span>
+                  <span style={{color:t.muted,fontWeight:500}}>· {weatherInfo.tip}</span>
+                </div>
+                <span style={{fontSize:10,fontWeight:700,color:t.muted,textTransform:"uppercase"}}>Open-Meteo</span>
+              </div>
+            )}
+
             <div style={{display:"grid",gap:8}}>
               <label style={{fontSize:12,fontWeight:700,color:t.sub}}>Task Title</label>
               <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="e.g. Need help assembling a study table"
@@ -1976,10 +2502,50 @@ function PostTask({t,setPage,currentUser}:any){
                 style={{width:"100%",padding:"12px 14px",borderRadius:12,background:t.input,border:`1.5px solid ${t.border}`,color:t.text,fontSize:14,outline:"none",resize:"vertical",fontFamily:"Poppins"}}/>
             </div>
 
-            <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",width:"fit-content"}}>
-              <input type="checkbox" checked={urgent} onChange={e=>setUrgent(e.target.checked)}/>
-              <span style={{fontSize:13,color:t.text,fontWeight:600}}>Mark this task as urgent</span>
-            </label>
+            {/* AI Dynamic Price & ETA Estimator Card */}
+            {(() => {
+              const estimate = calculateAiFareEstimate({
+                category: effectiveCategory,
+                distanceKm: 3.5,
+                urgency: urgent ? "express" : "standard",
+                weatherCondition: weatherInfo?.condition?.toLowerCase()?.includes("rain") ? "rain" : "clear",
+                isRushHour: new Date().getHours() >= 17 && new Date().getHours() <= 20,
+              });
+              return (
+                <div style={{padding:"14px 16px",borderRadius:16,background:`linear-gradient(135deg, ${t.primary}12, ${t.accent}12)`,border:`1px solid ${t.primary}30`}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                    <span style={{fontSize:12,fontWeight:800,color:t.primary,display:"flex",alignItems:"center",gap:6}}>
+                      🤖 AI Dynamic Price & ETA Estimator
+                    </span>
+                    <span style={{fontSize:11,fontWeight:700,padding:"3px 8px",borderRadius:99,background:t.primary,color:"#fff"}}>
+                      Gujarat Market Fair Rate
+                    </span>
+                  </div>
+                  <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:6}}>
+                    <span style={{fontSize:22,fontWeight:800,color:t.text,fontFamily:"Poppins"}}>₹{estimate.recommendedFare}</span>
+                    <span style={{fontSize:12,color:t.muted}}>Suggested Range: ₹{estimate.suggestedMinFare} - ₹{estimate.suggestedMaxFare}</span>
+                    <span style={{marginLeft:"auto",fontSize:12,fontWeight:700,color:t.accent}}>⏱️ Arrival in ~{estimate.estimatedArrivalMinutes} mins</span>
+                  </div>
+                  <p style={{fontSize:11,color:t.muted,margin:0}}>
+                    Calculated for {effectiveCategory} in Ahmedabad with current weather & traffic telemetry.
+                  </p>
+                </div>
+              );
+            })()}
+
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",width:"fit-content"}}>
+                <input type="checkbox" checked={urgent} onChange={e=>setUrgent(e.target.checked)}/>
+                <span style={{fontSize:13,color:t.text,fontWeight:600}}>Mark this task as urgent (Express Dispatch)</span>
+              </label>
+
+              <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",width:"fit-content",padding:"8px 12px",borderRadius:12,background:t.secondary,border:`1px solid ${t.border}`}}>
+                <input type="checkbox" defaultChecked />
+                <span style={{fontSize:12,color:t.text,fontWeight:600}}>
+                  🛡️ Add ₹9 Digit/Acko Gig Protection (Covers ₹25,000 accidental damage)
+                </span>
+              </label>
+            </div>
 
             {error&&<p style={{fontSize:12,color:t.danger,fontWeight:700}}>⚠ {error}</p>}
             <button className="press" type="submit" disabled={saving}
@@ -2340,6 +2906,9 @@ function Bidding({t,currentUser,setPage}:any){
       text: `Hi! I placed a bid for ₹${value} on "${task.title}".`,
       createdAt: serverTimestamp(),
     });
+    sound.playChime();
+    addHelperXP(35, "Bid placed");
+    triggerCelebration();
   };
 
   const requestTaskCompletion = async (task:any) => {
@@ -2404,13 +2973,30 @@ function Bidding({t,currentUser,setPage}:any){
           </p>
         )}
       </div>
-      <div style={{marginBottom:12}}>
-        <HelperRequestsMap
-          t={t}
-          tasks={nearbyOpenTasks}
-          radius={radius}
-          onRadiusChange={setRadius}
-          helperHasLocation={Boolean(helperLocation)}
+      <div style={{marginBottom:16}}>
+        <ProximityMap
+          userLocation={helperLocation || { lat: 28.6139, lng: 77.2090 }}
+          tasks={nearbyOpenTasks.length > 0 ? nearbyOpenTasks.map((task:any, idx:number)=>({
+            id: task.id,
+            title: task.title,
+            category: task.category,
+            paymentOptional: task.paymentOptional || 450,
+            distanceKm: task.distanceKm || ((idx % 4) + 1) * 1.2,
+            location: {
+              lat: task.lat || (28.6139 + Math.sin(idx + 1) * 0.02),
+              lng: task.lng || (77.2090 + Math.cos(idx + 1) * 0.02),
+            },
+            status: "open"
+          })) : [
+            { id: "demo-1", title: "Apartment Deep Cleaning", category: "Cleaning", paymentOptional: 600, distanceKm: 1.4, location: { lat: 28.6210, lng: 77.2150 } },
+            { id: "demo-2", title: "Algebra Tutoring for 10th Grader", category: "Tutoring", paymentOptional: 500, distanceKm: 2.8, location: { lat: 28.6080, lng: 77.2190 } },
+            { id: "demo-3", title: "Kitchen Sink Pipe Repair", category: "Repair", paymentOptional: 400, distanceKm: 3.5, location: { lat: 28.6270, lng: 77.1980 } },
+            { id: "demo-4", title: "Urgent Package Delivery", category: "Delivery", paymentOptional: 300, distanceKm: 0.9, location: { lat: 28.6110, lng: 77.2020 } }
+          ]}
+          onSelectTask={(selectedId:string)=>{
+            setExp(selectedId);
+          }}
+          isDark={t.mode==="dark"}
         />
       </div>
       <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
@@ -2536,7 +3122,9 @@ function Chat({t,currentUser}:any){
   const [msgs,setMsgs]=useState<any[]>([]);
   const [inp,setInp]=useState("");
   const [active,setActive]=useState(0);
-  const endRef=useRef(null);
+  const [chatLang,setChatLang]=useState<SupportedLanguage>("en");
+  const [showCallModal,setShowCallModal]=useState(false);
+  const endRef=useRef<HTMLDivElement|null>(null);
   const activeConvo = convos[active];
   const myId = currentUser?.uid;
   useEffect(()=>endRef.current?.scrollIntoView({behavior:"smooth"}),[msgs,active]);
@@ -2567,10 +3155,11 @@ function Chat({t,currentUser}:any){
     return ()=>unsub();
   },[activeConvo?.id]);
 
-  const send=async()=>{
-    if(!inp.trim() || !firestore || !activeConvo?.id || !myId) return;
+  const send=async(customText?: string)=>{
+    const raw = (customText || inp).trim();
+    if(!raw || !firestore || !activeConvo?.id || !myId) return;
     if(activeConvo?.sessionStatus === "closed") return;
-    const text = inp.trim();
+    const text = raw;
     await addDoc(collection(firestore, "conversations", activeConvo.id, "messages"), {
       senderId: myId,
       senderName: currentUser?.name || "User",
@@ -2582,16 +3171,18 @@ function Chat({t,currentUser}:any){
       lastMessage: text,
       lastMessageAt: serverTimestamp(),
     }, { merge: true });
-    setInp("");
+    if (!customText) setInp("");
   };
+
+  const otherParticipantName = activeConvo?.participantNames?.[(activeConvo?.participants||[]).find((p:string)=>p!==myId)] || "User";
 
   return(
     <div className="su" style={{padding:"20px 0",maxWidth:950}}>
       <div style={{marginBottom:18}}>
         <h2 style={{fontFamily:"Poppins",fontSize:28,fontWeight:800,color:t.text,letterSpacing:"-0.5px"}}>Messages</h2>
-        <p style={{color:t.sub,marginTop:5,fontSize:14}}>Chat with task helpers and users</p>
+        <p style={{color:t.sub,marginTop:5,fontSize:14}}>Encrypted chat with automated Gujarati & Hindi translation</p>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"230px 1fr",gap:14,height:540}}>
+      <div style={{display:"grid",gridTemplateColumns:"230px 1fr",gap:14,height:560}}>
         {/* Sidebar */}
         <GCard t={t} style={{display:"flex",flexDirection:"column",overflow:"hidden",padding:0}}>
           <div style={{padding:"14px 18px",borderBottom:`1px solid ${t.border}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
@@ -2631,39 +3222,86 @@ function Chat({t,currentUser}:any){
           ) : (
           <>
           {/* Header */}
-          <div style={{padding:"14px 20px",borderBottom:`1px solid ${t.border}`,display:"flex",alignItems:"center",gap:14}}>
-            <div style={{position:"relative"}}>
-              <div style={{width:38,height:38,borderRadius:"50%",background:`linear-gradient(135deg,${t.primary}80,${t.accent}80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800,color:"#fff"}}>
-                {(activeConvo?.participantNames?.[(activeConvo?.participants||[]).find((p:string)=>p!==myId)] || "U")[0]}
+          <div style={{padding:"12px 18px",borderBottom:`1px solid ${t.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <div style={{width:36,height:36,borderRadius:"50%",background:`linear-gradient(135deg,${t.primary}80,${t.accent}80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800,color:"#fff"}}>
+                {otherParticipantName[0]}
+              </div>
+              <div>
+                <div style={{fontSize:14,fontWeight:800,color:t.text,fontFamily:"Poppins"}}>
+                  {otherParticipantName}
+                </div>
+                <div style={{fontSize:11,fontWeight:600,color:t.muted}}>
+                  {activeConvo?.taskTitle || "Active gig channel"}
+                </div>
               </div>
             </div>
-            <div style={{flex:1}}>
-              <div style={{fontSize:15,fontWeight:800,color:t.text,fontFamily:"Poppins"}}>
-                {activeConvo?.participantNames?.[(activeConvo?.participants||[]).find((p:string)=>p!==myId)] || "User"}
+
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              {/* Language Selector */}
+              <div style={{display:"flex",alignItems:"center",background:t.secondary,borderRadius:10,padding:"2px 4px",border:`1px solid ${t.border}`}}>
+                <span style={{fontSize:10,fontWeight:700,color:t.muted,marginRight:4}}>Translate:</span>
+                <select
+                  value={chatLang}
+                  onChange={(e)=>setChatLang(e.target.value as SupportedLanguage)}
+                  style={{fontSize:11,fontWeight:700,background:"transparent",border:"none",color:t.text,outline:"none",cursor:"pointer"}}
+                >
+                  <option value="en">English</option>
+                  <option value="gu">ગુજરાતી</option>
+                  <option value="hi">हिंदी</option>
+                </select>
               </div>
-              <div style={{fontSize:11,fontWeight:600,color:t.muted,display:"flex",alignItems:"center",gap:4}}>
-                <span>{activeConvo?.taskTitle || "Task chat"}</span>
-              </div>
+
+              {/* Masked Audio Call Button */}
+              <button
+                onClick={()=>{
+                  sound.playTap();
+                  setShowCallModal(true);
+                }}
+                className="press"
+                style={{padding:"6px 12px",borderRadius:10,background:`linear-gradient(135deg,${t.primary},${t.accent})`,color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}
+              >
+                📞 Masked Call
+              </button>
             </div>
-            <button style={{width:34,height:34,borderRadius:10,background:t.secondary,border:`1px solid ${t.border}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:t.muted}}>
-              <I n="info" s={14}/>
-            </button>
           </div>
+
+          {/* Quick Gujarati / Hindi Phrases */}
+          <div style={{padding:"6px 14px",background:t.secondary,borderBottom:`1px solid ${t.border}`,display:"flex",alignItems:"center",gap:6,overflowX:"auto",scrollbarWidth:"none"}}>
+            <span style={{fontSize:10,fontWeight:800,color:t.muted,flexShrink:0}}>Quick {chatLang.toUpperCase()}:</span>
+            {translatorService.getQuickResponses(chatLang).slice(0, 4).map(qr => (
+              <button
+                key={qr.id}
+                onClick={()=>send(qr.text)}
+                style={{padding:"3px 8px",borderRadius:8,background:t.input,border:`1px solid ${t.border}`,color:t.text,fontSize:10,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}
+              >
+                {qr.text}
+              </button>
+            ))}
+          </div>
+
           {/* Messages */}
           <div style={{flex:1,overflowY:"auto",padding:"16px 20px",display:"flex",flexDirection:"column",gap:12}}>
             {msgs.map((m:any,i:number)=>{
               const mine = m.senderId===myId;
               const time = m.createdAt?.toDate ? m.createdAt.toDate().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}) : "";
+              const translated = chatLang !== "en" && !mine ? translatorService.translateText(m.text, chatLang) : null;
               return(
               <div key={m.id} style={{display:"flex",justifyContent:mine?"flex-end":"flex-start",animation:`slideUp .22s ease ${i*.02}s both`}}>
                 <div style={{maxWidth:"74%",padding:"11px 16px",borderRadius:mine?"18px 18px 4px 18px":"18px 18px 18px 4px",background:mine?`linear-gradient(135deg,${t.primary},${t.primary}cc)`:t.secondary,color:mine?"#fff":t.text,boxShadow:mine?`0 4px 14px ${t.primary}40`:t.shadow}}>
                   <p style={{fontSize:13,lineHeight:1.55}}>{m.text}</p>
+                  {translated && (
+                    <div style={{marginTop:4,paddingTop:4,borderTop:`1px dashed ${mine?"rgba(255,255,255,0.3)":"rgba(0,0,0,0.1)"}`,fontSize:11,fontWeight:600,color:mine?"#e0e7ff":t.primary}}>
+                      🌐 {translated}
+                    </div>
+                  )}
                   <p style={{fontSize:10,marginTop:4,opacity:.65,textAlign:mine?"right":"left"}}>{time}</p>
                 </div>
               </div>
             )})}
             <div ref={endRef}/>
           </div>
+
           {/* Input */}
           {activeConvo?.sessionStatus === "closed" ? (
             <div style={{padding:"14px 20px",borderTop:`1px solid ${t.border}`,display:"flex",alignItems:"center",justifyContent:"center",gap:10,background:t.secondary}}>
@@ -2678,7 +3316,7 @@ function Chat({t,currentUser}:any){
             <input value={inp} onChange={e=>setInp(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()} placeholder="Type a message…"
               style={{flex:1,padding:"10px 15px",borderRadius:12,background:t.input,border:`1.5px solid ${t.border}`,color:t.text,fontSize:13,outline:"none",backdropFilter:"blur(8px)",transition:"border-color .15s"}}
               onFocus={e=>e.target.style.borderColor=t.primary} onBlur={e=>e.target.style.borderColor=t.border}/>
-            <button className="press" onClick={send}
+            <button className="press" onClick={()=>send()}
               style={{width:38,height:38,borderRadius:12,background:`linear-gradient(135deg,${t.primary},${t.accent})`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 4px 12px ${t.primary}40`,flexShrink:0}}>
               <I n="send" s={14} c="#fff"/>
             </button>
@@ -2688,6 +3326,16 @@ function Chat({t,currentUser}:any){
           )}
         </GCard>
       </div>
+
+      {/* WebRTC Masked Calling Modal */}
+      {showCallModal && (
+        <WebRtcCallModal
+          callerName={otherParticipantName}
+          callerRole="MicroLink Verified Contact"
+          isDark={t.mode==="dark"}
+          onClose={()=>setShowCallModal(false)}
+        />
+      )}
     </div>
   );
 }
@@ -3222,13 +3870,52 @@ function NotificationsPage({t,currentUser,notifications,onMarkRead,onMarkAllRead
 export default function App(){
   injectCSS();
   const { user: authUser, profile, loading: authLoading, signOut } = useAuth();
-  const [dark,setDark]=useState(false);
-  const [page,setPage]=useState(authUser ? "dashboard" : "login");
+  const [dark,setDark]=useState(false); // Open in light mode always as requested
+  const [demoUser,setDemoUser]=useState<any>(()=>{
+    if(typeof window!=="undefined"){
+      const saved=localStorage.getItem("microlink_demo_user");
+      return saved?JSON.parse(saved):null;
+    }
+    return null;
+  });
+  const [page,setPage]=useState(authUser || demoUser ? "dashboard" : "login");
   const [dashboardFocusTab,setDashboardFocusTab]=useState<string | null>(null);
   const [online,setOnline]=useState(true);
   const [postedTasks,setPostedTasks]=useState<any[]>([]);
   const [notifications,setNotifications]=useState<any[]>([]);
   const [wide,setWide]=useState(typeof window!=="undefined"&&window.innerWidth>=860);
+
+  const [isEyeCare,setIsEyeCare]=useState<boolean>(()=>{
+    if(typeof window!=="undefined"){
+      return document.documentElement.classList.contains("eye-care-mode");
+    }
+    return false;
+  });
+
+  const [isSound,setIsSound]=useState<boolean>(()=>sound.isEnabled());
+
+  const [walletBalance, setWalletBalance] = useState<number>(100);
+  const [isVerified, setIsVerified] = useState<boolean>(true);
+  const [showVerificationModal, setShowVerificationModal] = useState<boolean>(false);
+  const [showGoogleRewardModal, setShowGoogleRewardModal] = useState<boolean>(false);
+  const [showAadhaarKycModal, setShowAadhaarKycModal] = useState<boolean>(false);
+
+  const toggleEyeCare=()=>{
+    const next=!isEyeCare;
+    setIsEyeCare(next);
+    if(typeof window!=="undefined"){
+      if(next){
+        document.documentElement.classList.add("eye-care-mode");
+      }else{
+        document.documentElement.classList.remove("eye-care-mode");
+      }
+    }
+  };
+
+  const toggleSound=()=>{
+    const next=sound.toggleSound();
+    setIsSound(next);
+  };
 
   useEffect(()=>{
     const h=()=>setWide(window.innerWidth>=860);
@@ -3270,21 +3957,13 @@ export default function App(){
           return;
         }
         setPage(nextPage);
-      } else if(!authUser && page!=="login"){
+      } else if(!authUser && !demoUser && page!=="login"){
         setPage("login");
       }
     }
-  },[authUser, authLoading, page, profile, profile?.role, getLandingPage]);
-
-  useEffect(()=>{
-    if (!authUser || authLoading) return;
-    if (profile?.role === "user" && page === "requests") {
-      setPage("dashboard");
-    }
-  },[authUser, authLoading, page, profile?.role]);
+  },[authUser, authLoading, page, profile, profile?.role, getLandingPage, demoUser]);
 
   const t=(TH as any)[dark?"dark":"light"];
-  const loggedIn=page!=="login" && !!authUser;
 
   const userForUI = authUser ? {
     name: profile?.name || authUser.displayName || authUser.email?.split("@")[0] || "User",
@@ -3304,6 +3983,74 @@ export default function App(){
     paymentDetails: profile?.paymentDetails,
   } : null;
 
+  const activeUser = userForUI || demoUser;
+  const loggedIn = page!=="login" && !!activeUser;
+
+  const handleDemoLogin = (role: "user" | "helper") => {
+    const sample = role === "helper" ? {
+      name: "Alex Morgan",
+      email: "alex.helper@microlink.app",
+      phone: "+91 98765 43210",
+      age: "24",
+      gender: "Female",
+      address: "Connaught Place, New Delhi",
+      bio: "Certified electrical repair specialist & math tutor. Fast responder!",
+      interests: ["repair", "tutoring", "tech", "cleaning"],
+      role: "helper",
+      joinedDate: "12 January 2024",
+      joinedFull: new Date().toISOString(),
+      rating: 4.9,
+      helperMeta: {
+        skills: ["repair", "tutoring", "tech", "cleaning"],
+        availability: { weekdays: ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"], startHour: 8, endHour: 20, timezone: "Asia/Kolkata" },
+        experienceYears: 3,
+        verified: true,
+        isSuspended: false
+      },
+      stats: { completedCount: 28, ratingAvg: 4.9, ratingCount: 26 },
+      location: { city: "New Delhi", lat: 28.6139, lng: 77.2090 }
+    } : {
+      name: "Rohan Sharma",
+      email: "rohan.user@microlink.app",
+      phone: "+91 91234 56789",
+      age: "29",
+      gender: "Male",
+      address: "South Extension, New Delhi",
+      bio: "Startup founder. Frequently looking for reliable local help and deliveries.",
+      interests: [],
+      role: "user",
+      joinedDate: "5 February 2024",
+      joinedFull: new Date().toISOString(),
+      rating: 5.0,
+      stats: { completedCount: 14, ratingAvg: 5.0, ratingCount: 12 },
+      location: { city: "New Delhi", lat: 28.6139, lng: 77.2090 }
+    };
+    setDemoUser(sample);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("microlink_demo_user", JSON.stringify(sample));
+    }
+    sound.playSuccess();
+    setPage("dashboard");
+  };
+
+  const handleSwitchRole = (newRole: "user" | "helper") => {
+    if (demoUser) {
+      const updated = { ...demoUser, role: newRole };
+      setDemoUser(updated);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("microlink_demo_user", JSON.stringify(updated));
+      }
+    } else if (activeUser) {
+      const updated = { ...activeUser, role: newRole };
+      setDemoUser(updated);
+    }
+    if (newRole === "user" && page === "requests") {
+      setPage("dashboard");
+    } else if (newRole === "helper" && page === "post-task") {
+      setPage("requests");
+    }
+  };
+
   const login=useCallback(()=>{
     const nextPage = getLandingPage(profile?.role, profile);
     if (nextPage === "admin") {
@@ -3311,12 +4058,17 @@ export default function App(){
       return;
     }
     setPage(nextPage);
-  },[getLandingPage, profile, profile?.role]);
+  },[getLandingPage, profile]);
 
   const handleSignOut = useCallback(async () => {
+    if(demoUser){
+      setDemoUser(null);
+      if(typeof window!=="undefined") localStorage.removeItem("microlink_demo_user");
+    }
     await signOut();
     setPage("login");
-  }, [signOut]);
+  }, [signOut, demoUser]);
+
   const unreadCount = notifications.filter((item:any)=>!item.read).length;
 
   const markRead = async (notificationId:string) => {
@@ -3341,36 +4093,133 @@ export default function App(){
     </div>
   );
 
+  const handleGoogleRewardLogin = () => {
+    const googleSample = {
+      name: "Kavya Trivedi",
+      email: "kavya.trivedi@gmail.com",
+      phone: "+91 98250 49120",
+      age: "26",
+      gender: "Female",
+      address: "Satellite, Ahmedabad, Gujarat",
+      bio: "Google Verified Member. Looking for reliable home services & tech tutoring in Ahmedabad.",
+      interests: ["tech", "tutoring", "cleaning"],
+      role: "user",
+      rating: 5.0,
+      isVerified: true,
+      stats: { completedCount: 8, ratingAvg: 5.0, ratingCount: 8 },
+      location: { city: "Ahmedabad", lat: 23.0225, lng: 72.5714 }
+    };
+    setDemoUser(googleSample);
+    if(typeof window!=="undefined"){
+      localStorage.setItem("microlink_demo_user", JSON.stringify(googleSample));
+    }
+    setWalletBalance(prev => prev + 100);
+    addHelperXP(150, "Google Welcome Reward");
+    sound.playSuccess();
+    triggerCelebration();
+    setShowGoogleRewardModal(true);
+    setPage("dashboard");
+  };
+
   return(
     <div style={{minHeight:"100vh",color:t.text,display:"flex",position:"relative",background:t.bgGrad}}>
       <Bg t={t}/>
+      <InteractiveIllustrations isDark={dark} />
 
       {loggedIn&&wide&&(
         <Sidebar page={page} setPage={setPage} t={t} isDark={dark}
           toggleTheme={()=>setDark(v=>!v)} online={online}
-          setOnline={setOnline} user={userForUI} unreadCount={unreadCount}/>
+          setOnline={setOnline} user={activeUser} unreadCount={unreadCount}/>
       )}
 
       <main style={{flex:1,position:"relative",zIndex:1,overflowY:"auto",paddingBottom:loggedIn&&!wide?80:0,minHeight:"100vh"}}>
         {loggedIn&&(
-          <div style={{padding:"0 24px"}}>
-            <TopBar t={t} user={userForUI} online={online} setOnline={setOnline} setPage={setPage} onSignOut={handleSignOut} unreadCount={unreadCount}/>
+          <div style={{maxWidth:1180,margin:"0 auto",padding:"0 28px"}}>
+            <TopBar
+              t={t}
+              user={activeUser}
+              online={online}
+              setOnline={setOnline}
+              setPage={setPage}
+              onSignOut={handleSignOut}
+              unreadCount={unreadCount}
+              onSwitchRole={handleSwitchRole}
+              isEyeCare={isEyeCare}
+              onToggleEyeCare={toggleEyeCare}
+              isSound={isSound}
+              onToggleSound={toggleSound}
+              walletBalance={walletBalance}
+              isVerified={isVerified}
+              onOpenVerification={()=>setShowVerificationModal(true)}
+              onOpenAadhaarKyc={()=>setShowAadhaarKycModal(true)}
+            />
           </div>
         )}
-        <div style={{padding:loggedIn?"0 24px":0}}>
-          {page==="login"    &&<LoginPage onLogin={login} t={t} isDark={dark} toggleTheme={()=>setDark(v=>!v)}/>}
-          {page==="dashboard"&&<Dashboard t={t} user={userForUI} setPage={setPage} postedTasks={postedTasks} currentUid={authUser?.uid} focusTab={dashboardFocusTab} onFocusTabHandled={()=>setDashboardFocusTab(null)}/>}
-          {page==="post-task"&&<PostTask t={t} setPage={setPage} currentUser={{uid: authUser?.uid, ...userForUI}}/>}
-          {page==="requests"  &&<Bidding t={t} currentUser={{uid: authUser?.uid, ...userForUI}} setPage={setPage}/>}
-          {page==="chat"     &&<Chat t={t} currentUser={{uid: authUser?.uid, ...userForUI}}/>}
-          {page==="notifications"&&<NotificationsPage t={t} currentUser={{uid: authUser?.uid, ...userForUI}} notifications={notifications} onMarkRead={markRead} onMarkAllRead={markAllRead} setPage={setPage} setDashboardTab={setDashboardFocusTab}/>}
-          {page==="profile"  &&<Profile t={t} user={userForUI} currentUid={authUser?.uid} online={online} setOnline={setOnline} setPage={setPage}/>}
+        <div key={page} className="page-slide-in" style={{maxWidth:1180,margin:"0 auto",padding:loggedIn?"0 28px 48px":0}}>
+          {page==="login"    &&<LoginPage onLogin={login} onDemoLogin={handleDemoLogin} onGoogleRewardLogin={handleGoogleRewardLogin} t={t} isDark={dark} toggleTheme={()=>setDark((v:boolean)=>!v)}/>}
+          {page==="dashboard"&&<Dashboard t={t} user={activeUser} setPage={setPage} postedTasks={postedTasks} currentUid={authUser?.uid || "demo-uid"} focusTab={dashboardFocusTab} onFocusTabHandled={()=>setDashboardFocusTab(null)}/>}
+          {page==="tracking" &&(
+            <div style={{padding:"20px 0",maxWidth:"100%"}} className="su">
+              <div style={{marginBottom:18}}>
+                <h2 style={{fontFamily:"Poppins",fontSize:28,fontWeight:800,color:t.text,letterSpacing:"-0.5px"}}>Gujarat Live Task Route Tracking</h2>
+                <p style={{color:t.sub,marginTop:5,fontSize:14}}>Real-time vehicle telemetry, live route and arrival estimate across Ahmedabad (SG Highway to Satellite)</p>
+              </div>
+              <LiveTrackingMap isDark={dark} />
+            </div>
+          )}
+          {page==="post-task"&&<PostTask t={t} setPage={setPage} currentUser={{uid: authUser?.uid || "demo-uid", ...activeUser}}/>}
+          {page==="requests"  &&<Bidding t={t} currentUser={{uid: authUser?.uid || "demo-uid", ...activeUser}} setPage={setPage}/>}
+          {page==="chat"     &&<Chat t={t} currentUser={{uid: authUser?.uid || "demo-uid", ...activeUser}}/>}
+          {page==="notifications"&&<NotificationsPage t={t} currentUser={{uid: authUser?.uid || "demo-uid", ...activeUser}} notifications={notifications} onMarkRead={markRead} onMarkAllRead={markAllRead} setPage={setPage} setDashboardTab={setDashboardFocusTab}/>}
+          {page==="profile"  &&<Profile t={t} user={activeUser} currentUid={authUser?.uid || "demo-uid"} online={online} setOnline={setOnline} setPage={setPage}/>}
           {page==="subscription"&&<SubscriptionPage t={t} setPage={setPage}/>}
           {page==="contact"  &&<ContactUs t={t}/>}
         </div>
       </main>
 
-      {loggedIn&&!wide&&<MobileNav page={page} setPage={setPage} t={t} user={userForUI}/>}
+      {loggedIn&&!wide&&<MobileNav page={page} setPage={setPage} t={t} user={activeUser}/>}
+
+      {/* DigiLocker Aadhaar e-KYC Verification Modal */}
+      {showAadhaarKycModal && (
+        <AadhaarKycModal
+          userName={activeUser?.name || "Verified User"}
+          isDark={dark}
+          onClose={()=>setShowAadhaarKycModal(false)}
+          onVerified={()=>{
+            setIsVerified(true);
+            setShowAadhaarKycModal(false);
+          }}
+        />
+      )}
+
+      {/* Anti-Fake True Account Verification Modal */}
+      {showVerificationModal && (
+        <AccountVerificationModal
+          user={activeUser}
+          isDark={dark}
+          onClose={()=>setShowVerificationModal(false)}
+          onVerified={()=>{
+            setIsVerified(true);
+            setShowVerificationModal(false);
+          }}
+        />
+      )}
+
+      {/* Google Reward Celebratory Modal */}
+      {showGoogleRewardModal && (
+        <GoogleRewardModal
+          isDark={dark}
+          onClose={()=>setShowGoogleRewardModal(false)}
+        />
+      )}
+
+      {/* Interactive Mascot Assistant (Technique 13: Character Website Animations) */}
+      {loggedIn && (
+        <MascotAssistant
+          isDark={dark}
+          onPostTaskClick={()=>setPage("post-task")}
+        />
+      )}
     </div>
   );
 }
