@@ -71,7 +71,7 @@ export default class ErrorBoundary extends Component<Props, State> {
             }}
           >
             <div style={{ display: "flex", justifyContent: "center", marginBottom: "20px" }}>
-              <AppLogo size={48} showWordmark={true} />
+              <AppLogo size={48} showText={true} />
             </div>
 
             <div
